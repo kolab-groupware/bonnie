@@ -5,6 +5,7 @@
 *.pyc
 *.pyo
 *.rej
+*.swp
 *.tar.gz
 *.tar.gz.gpg
 test-*
