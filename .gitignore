@@ -1,0 +1,10 @@
+*~
+*.kate-swp
+*.log
+*.orig
+*.pyc
+*.pyo
+*.rej
+*.tar.gz
+*.tar.gz.gpg
+test-*
