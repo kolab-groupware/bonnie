@@ -67,9 +67,7 @@ class BonnieWorker(object):
             to return the (new) version of their event notification.
         """
 
-        #print notification
         notification = json.loads(notification)
-        #print notification
 
         event = notification['event']
 

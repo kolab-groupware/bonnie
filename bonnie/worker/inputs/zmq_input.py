@@ -85,8 +85,6 @@ class ZMQInput(object):
         while True:
             sockets = dict(self.poller.poll(1000))
 
-            print "polled"
-
             if self.report_timestamp < (time.time() - 60):
                 self.report_state()
 

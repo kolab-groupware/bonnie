@@ -36,6 +36,8 @@ import bonnie
 conf = bonnie.getConf()
 
 class ZMQInput(object):
+    state = b"READY"
+
     def __init__(self, *args, **kw):
         self.context = zmq.Context()
 
@@ -58,22 +60,40 @@ class ZMQInput(object):
     def register(self, *args, **kw):
         pass
 
+    def report_state(self):
+        print "reporting state", self.state
+        self.collector.send_multipart([b"STATE", self.state])
+        self.report_timestamp = time.time()
+
     def run(self, callback=None):
-        print "running"
+        print "%s starting" % (self.identity)
+
+        self.report_state()
+
         while True:
             sockets = dict(self.poller.poll(1000))
 
-            self.collector.send_multipart([b"READY"])
+            if self.report_timestamp < (time.time() - 60):
+                self.report_state()
 
             if self.collector in sockets:
                 if sockets[self.collector] == zmq.POLLIN:
                     _message = self.collector.recv_multipart()
-                    _job_uuid = _message[0]
-                    _notification = _message[1]
 
-                    if not callback == None:
-                        result = callback(_notification)
+                    if _message[0] == b"STATE":
+                        self.report_state()
 
-                    self.collector.send_multipart([b"DONE", _job_uuid, result])
+                    if _message[0] == b"TAKE":
+                        if not self.state == b"READY":
+                            self.report_state()
+
+                        else:
+                            _job_uuid = _message[1]
+                            _notification = _message[2]
+
+                            if not callback == None:
+                                result = callback(_notification)
+
+                            self.collector.send_multipart([b"DONE", _job_uuid, result])
 
         self.collector.close()

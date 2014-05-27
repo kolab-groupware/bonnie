@@ -32,13 +32,16 @@ class MessageAppendHandler(HandlerBase):
     def register(self, callback):
         interests = {
                 self.event: {
-                        'callback': self.run
+                        'callback': self.run,
                     }
             }
 
         callback(interests)
 
     def run(self, notification):
+        if notification.has_key('messageContent') and not notification['messageContent'] in [None, ""]:
+            return (notification, [])
+
         print "adding a job for messageappend"
         jobs = [ b"RETRIEVE" ]
         return (notification, jobs)

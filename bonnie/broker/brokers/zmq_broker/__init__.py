@@ -46,7 +46,13 @@ class ZMQBroker(object):
     def register(self, callback):
         callback({ '_all': self.run })
 
-    def collector_job(self, _collector_id):
+    def collector_add(self, _collector_id, _state):
+        print "adding collector", _collector_id
+
+        collector = Collector(_collector_id, _state)
+        self.collectors[_collector_id] = collector
+
+    def collect_job_allocate(self, _collector_id):
         jobs = [x for x in self.collect_jobs if x.collector_id == _collector_id and x.state == b"PENDING"]
 
         if len(jobs) < 1:
@@ -56,7 +62,19 @@ class ZMQBroker(object):
         job.set_state(b"ALLOC")
         return job
 
-    def worker_job_add(self, _notification, client_id=None):
+    def collect_jobs_with_status(self, _state, collector_id=None):
+        return [x for x in self.collect_jobs if x.state == _state and x.collector_id == collector_id]
+
+    def collector_set_status(self, _collector_id, _state):
+        if not self.collectors.has_key(_collector_id):
+            self.collector_add(_collector_id, _state)
+        else:
+            self.collectors[_collector_id].set_status(_state)
+
+    def collectors_with_status(self, _state):
+        return [collector_id for collector_id, collector in self.collectors.iteritems() if collector.state == _state]
+
+    def worker_job_add(self, _notification, client_id=None, collector_id=None):
         """
             Add a new job.
         """
@@ -64,7 +82,8 @@ class ZMQBroker(object):
                 notification=_notification,
                 state=b"PENDING",
                 worker=None,
-                client_id=client_id
+                client_id=client_id,
+                collector_id=collector_id,
             )
 
         if not job.uuid in [x.uuid for x in self.worker_jobs]:
@@ -218,7 +237,8 @@ class ZMQBroker(object):
                     print _message
                     _client_id = _message[0]
                     _notification = _message[1]
-                    self.worker_job_add(_notification, client_id=_client_id)
+                    _collector_id = _client_id.replace('Dealer', 'Collector')
+                    self.worker_job_add(_notification, client_id=_client_id, collector_id=_collector_id)
 
                     client_router.send_multipart([_message[0], b"ACK"])
 
@@ -227,16 +247,16 @@ class ZMQBroker(object):
                     _message = self.collector_router.recv_multipart()
                     print _message
 
-                    if _message[1] == b"READY":
-                        collector_id = _message[0]
-                        job = self.collector_job(collector_id)
-                        if not job == None:
-                            self.collector_router.send_multipart([collector_id, job.uuid, job.notification])
+                    if _message[1] == b"STATE":
+                        _collector_id = _message[0]
+                        _state = _message[2]
+                        self.collector_set_status(_collector_id, _state)
 
                     if _message[1] == b"DONE":
                         _collector_id = _message[0]
-                        _notification = _message[2]
-                        self.worker_job_add(_notification, collector_id=_collector_id)
+                        _job_uuid = _message[2]
+                        _notification = _message[3]
+                        self.transit_job_worker(_job_uuid, _notification=_notification)
 
             if self.worker_router in sockets:
                 if sockets[self.worker_router] == zmq.POLLIN:
@@ -257,6 +277,15 @@ class ZMQBroker(object):
                 if not _job_uuid == None:
                     self.controller.send_multipart([_worker_id, b"TAKE", _job_uuid])
 
+            ready_collectors = self.collectors_with_status(b"READY")
+
+            for collector in ready_collectors:
+                pending_jobs = self.collect_jobs_with_status(b"PENDING", collector_id=collector)
+                if len(pending_jobs) > 0:
+                    job = self.collect_job_allocate(collector)
+                    self.collector_router.send_multipart([job.collector_id, b"TAKE", job.uuid, job.notification])
+
+
         client_router.close()
         self.controller.close()
         self.collector_router.close()
@@ -265,6 +294,14 @@ class ZMQBroker(object):
 
     def transit_job_collect(self, _job_uuid):
         for job in [x for x in self.worker_jobs if x.uuid == _job_uuid]:
+            job.set_state(b"PENDING")
             self.collect_jobs.append(job)
             del self.worker_jobs[self.worker_jobs.index(job)]
+
+    def transit_job_worker(self, _job_uuid, _notification):
+        for job in [x for x in self.collect_jobs if x.uuid == _job_uuid]:
+            job.set_state(b"PENDING")
+            job.notification = _notification
+            self.worker_jobs.append(job)
+            del self.collect_jobs[self.collect_jobs.index(job)]
 
