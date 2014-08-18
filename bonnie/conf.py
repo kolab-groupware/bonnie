@@ -38,6 +38,8 @@ class Conf(object):
         elif os.path.exists(os.path.abspath(os.path.dirname(__file__) + '/../conf/bonnie.conf')):
             self.config.read(os.path.abspath(os.path.dirname(__file__) + '/../conf/bonnie.conf'))
 
+        self.defaults = Defaults()
+
     def add_cli_parser_option_group(self, name):
         return self.cli_parser.add_option_group(name)
 
@@ -119,8 +121,6 @@ class Conf(object):
 
     def finalize_conf(self,fatal=True):
         self.parse_options(fatal=fatal)
-
-        self.defaults = Defaults()
 
         # The defaults can some from;
         # - a file we ship with the packages
