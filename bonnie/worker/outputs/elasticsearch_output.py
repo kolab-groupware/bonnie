@@ -31,9 +31,12 @@ class ElasticSearchOutput(object):
         # The output should have UTC timestamps, but gets "2014-05-16T12:55:53.870+02:00"
         timestamp = notification['timestamp']
         notification['@timestamp'] = datetime.datetime.strftime(parse(timestamp).astimezone(tzutc()), "%Y-%m-%dT%H:%M:%S.%fZ")
-        #print "es output for:", notification
+
+        # Delete the former timestamp
+        del notification['timestamp']
+
         self.es.create(
-                index='raw-logstash',
+                index='logstash-%s' % (datetime.datetime.strftime(parse(timestamp).astimezone(tzutc()), "%Y-%m-%d")),
                 doc_type='logs',
                 body=notification
             )
