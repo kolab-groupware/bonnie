@@ -29,6 +29,7 @@ import storage
 
 import bonnie
 conf = bonnie.getConf()
+from bonnie.translate import _
 
 class BonnieWorker(object):
     handler_interests = { '_all': [] }
@@ -42,6 +43,28 @@ class BonnieWorker(object):
     output_modules = {}
 
     def __init__(self, *args, **kw):
+
+        daemon_group = conf.add_cli_parser_option_group(_("Daemon Options"))
+
+        daemon_group.add_option(
+                "--fork",
+                dest    = "fork_mode",
+                action  = "store_true",
+                default = False,
+                help    = _("Fork to the background.")
+            )
+
+        daemon_group.add_option(
+                "-p",
+                "--pid-file",
+                dest    = "pidfile",
+                action  = "store",
+                default = "/var/run/bonnie/worker.pid",
+                help    = _("Path to the PID file to use.")
+            )
+
+        conf.finalize_conf()
+
         for _class in handlers.list_classes():
             __class = _class()
             self.handler_modules[__class] = __class.register(callback=self.register_handler)

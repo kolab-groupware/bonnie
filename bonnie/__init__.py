@@ -17,7 +17,19 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+import logging
 import threading
+
+from bonnie.logger import Logger
+logging.setLoggerClass(Logger)
+
+def getLogger(name):
+    """
+        Return the correct logger class.
+    """
+    logging.setLoggerClass(Logger)
+    log = logging.getLogger(name=name)
+    return log
 
 from bonnie.conf import Conf
 conf = Conf()
@@ -26,7 +38,10 @@ def getConf():
     _data = threading.local()
     if hasattr(_data, 'conf'):
         log.debug(_("Returning thread local configuration"))
-        return _data.conf.get()
+        return _data.conf
 
-    return conf.get()
+    return conf
+
+
+
 
