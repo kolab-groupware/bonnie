@@ -88,7 +88,7 @@ class Conf(object):
         runtime_group.add_option(   "-c", "--config",
                                     dest    = "config_file",
                                     action  = "store",
-                                    default = "/etc/kolab/kolab.conf",
+                                    default = "/etc/bonnie/bonnie.conf",
                                     help    = _("Configuration file to use"))
 
         runtime_group.add_option(   "-d", "--debug",
