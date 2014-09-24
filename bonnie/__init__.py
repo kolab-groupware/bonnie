@@ -23,6 +23,8 @@ import threading
 from bonnie.logger import Logger
 logging.setLoggerClass(Logger)
 
+API_VERSION = 1
+
 def getLogger(name):
     """
         Return the correct logger class.
@@ -41,7 +43,5 @@ def getConf():
         return _data.conf
 
     return conf
-
-
 
 

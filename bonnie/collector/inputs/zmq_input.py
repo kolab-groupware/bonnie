@@ -34,6 +34,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('collector.ZMQInput')
 
 class ZMQInput(object):
     state = b"READY"
@@ -61,12 +62,12 @@ class ZMQInput(object):
         pass
 
     def report_state(self):
-        print "reporting state", self.state
+        log.debug("[%s] Reporting state %s" % (self.identity, self.state), level=9)
         self.collector.send_multipart([b"STATE", self.state])
         self.report_timestamp = time.time()
 
     def run(self, callback=None):
-        print "%s starting" % (self.identity)
+        log.info("[%s] starting", self.identity)
 
         self.report_state()
 
@@ -83,7 +84,7 @@ class ZMQInput(object):
                     if _message[0] == b"STATE":
                         self.report_state()
 
-                    if _message[0] == b"TAKE":
+                    else:
                         if not self.state == b"READY":
                             self.report_state()
 
@@ -92,7 +93,7 @@ class ZMQInput(object):
                             _notification = _message[2]
 
                             if not callback == None:
-                                result = callback(_notification)
+                                result = callback(_message[0], _notification)
 
                             self.collector.send_multipart([b"DONE", _job_uuid, result])
 

@@ -98,7 +98,6 @@ class BonnieWorker(object):
 
         if self.handler_interests.has_key(event):
             for interest in self.handler_interests[event]:
-#                print self.handler_interests[event]
                 (notification, _jobs) = interest['callback'](notification=notification)
                 jobs.extend(_jobs)
 
@@ -110,8 +109,6 @@ class BonnieWorker(object):
             for interest in self.output_interests['_all']:
                 (notification, _jobs) = interest['callback'](notification=notification)
                 jobs.extend(_jobs)
-
-        print jobs
 
         return notification, jobs
 

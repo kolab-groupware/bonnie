@@ -26,6 +26,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('dealer.ZMQOutput')
 
 class ZMQOutput(object):
     def __init__(self, *args, **kw):
@@ -50,6 +51,7 @@ class ZMQOutput(object):
         return [ 'MailboxCreate' ]
 
     def run(self, notification):
+        log.debug("[%s] Notification received: %r" % (self.dealer.identity, notification), level=9)
         self.dealer.send(notification)
 
         received_reply = False
@@ -58,6 +60,7 @@ class ZMQOutput(object):
             if self.dealer in sockets:
                 if sockets[self.dealer] == zmq.POLLIN:
                     _reply = self.dealer.recv_multipart()
+                    log.debug("[%s] Reply: %r" % (self.dealer.identity, _reply), level=9)
                     if _reply[0] == b"ACK":
                         received_reply = True
 

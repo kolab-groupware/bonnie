@@ -38,6 +38,7 @@ class Job(object):
         self.client_id = client_id
         self.collector_id = collector_id
         self.timestamp = time.time()
+        self.command = None
 
         if self.client_id == None:
             if self.collector_id == None:
@@ -52,3 +53,6 @@ class Job(object):
 
     def set_worker(self, worker):
         self.worker = worker
+
+    def set_command(self, cmd):
+        self.command = cmd

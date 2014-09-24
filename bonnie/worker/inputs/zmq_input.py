@@ -33,6 +33,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('worker.ZMQInput')
 
 class ZMQInput(object):
     def __init__(self, *args, **kw):
@@ -78,7 +79,7 @@ class ZMQInput(object):
         self.report_timestamp = time.time()
 
     def run(self, callback=None):
-        print "%s starting" % (self.identity)
+        log.info("[%s] starting", self.identity)
 
         self.report_state()
 
@@ -91,7 +92,7 @@ class ZMQInput(object):
             if self.controller in sockets:
                 if sockets[self.controller] == zmq.POLLIN:
                     _message = self.controller.recv_multipart()
-                    print _message
+                    log.debug("[%s] Controller message: %r" % (self.identity, _message), level=9)
 
                     if _message[0] == b"STATE":
                         self.report_state()
@@ -107,7 +108,7 @@ class ZMQInput(object):
             if self.worker in sockets:
                 if sockets[self.worker] == zmq.POLLIN:
                     _message = self.worker.recv_multipart()
-                    print _message
+                    log.debug("[%s] Worker message: %r" % (self.identity, _message), level=9)
 
                     if _message[0] == "JOB":
                         # TODO: Sanity checking
@@ -118,7 +119,7 @@ class ZMQInput(object):
                         if len(jobs) == 0:
                             self.controller.send_multipart([b"DONE", _message[1]])
                         else:
-                            print "I have jobs:", jobs
+                            log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
 
                         for job in jobs:
                             self.controller.send_multipart([job, _message[1]])
@@ -128,18 +129,18 @@ class ZMQInput(object):
         self.worker.close()
 
     def set_state_busy(self):
-        #print "set state to busy"
+        log.debug("[%s] Set state to BUSY" % (self.identity), level=9)
         self.controller.send_multipart([b"STATE", b"BUSY", b"%s" % (self.job_id)])
         self.state = b"BUSY"
 
     def set_state_ready(self):
-        #print "set state to ready"
+        log.debug("[%s] Set state to READY" % (self.identity), level=9)
         self.controller.send_multipart([b"STATE", b"READY"])
         self.state = b"READY"
         self.job_id = None
 
     def take_job(self, _job_id):
-        print "taking job", _job_id
+        log.debug("[%s] Accept job %s" % (self.identity, _job_id), level=9)
         self.set_state_busy()
         self.worker.send_multipart([b"GET", _job_id])
         self.job_id = _job_id

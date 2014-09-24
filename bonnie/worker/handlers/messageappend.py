@@ -43,5 +43,5 @@ class MessageAppendHandler(HandlerBase):
             return (notification, [])
 
         print "adding a job for messageappend"
-        jobs = [ b"RETRIEVE" ]
+        jobs = [ b"FETCH" ]
         return (notification, jobs)

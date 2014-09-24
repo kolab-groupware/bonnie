@@ -32,6 +32,7 @@ import inputs
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('collector')
 
 class BonnieCollector(object):
     input_interests = {}
@@ -57,6 +58,7 @@ class BonnieCollector(object):
         messageContents = {}
 
         notification = json.loads(notification)
+        log.debug("FETCH for %r" % (notification), level=9)
 
         split_uri = urlparse.urlsplit(notification['uri'])
 
@@ -77,19 +79,18 @@ class BonnieCollector(object):
         # Second, .path == 'Calendar/Personal%20Calendar;UIDVALIDITY=$x[/;UID=$y]
         # Take everything before the first ';' (but only actually take everything
         # before the first ';' in the next step, here we still have use for it).
+        # TODO: parse the path/query parameters into a dict
         path_part = path_part.split(';')
 
-        # Use or abuse the length of path_parts at this moment to see if we have
-        # a message UID.
-        if len(path_part) == 3:
+        if notification.has_key('uidset'):
+            message_uids = expand_uidset(notification['uidset'])
+        elif notification.has_key('vnd.cmu.oldUidset'):
+            message_uids = expand_uidset(notification['vnd.cmu.oldUidset'])
+        elif len(path_part) == 3:
+            # Use or abuse the length of path_parts at this moment to extract the message UID
             message_uids = [ path_part[2].split('=')[1] ]
-        else:
-            if notification.has_key('uidset'):
-                message_uids = expand_uidset(notification['uidset'])
-                print message_uids
-            if notification.has_key('vnd.cmu.oldUidset'):
-                message_uids = expand_uidset(notification['vnd.cmu.oldUidset'])
-                print message_uids
+            notification['uidset'] = message_uids
+
 
         # Third, .path == 'Calendar/Personal%20Calendar
         # Decode the url encoding
@@ -123,7 +124,7 @@ class BonnieCollector(object):
                     ["/usr/lib/cyrus-imapd/mbpath", folder_path]
                 ).strip()
 
-            print "using mailbox path: %r" % (mailbox_path)
+            log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
 
         else:
             # Do it the old-fashioned way
@@ -136,7 +137,7 @@ class BonnieCollector(object):
             (stdout, stderr) = p1.communicate()
 
             mailbox_path = stdout.strip()
-            print "using mailbox path: %r" % (mailbox_path)
+            log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
 
         # TODO: Assumption #4 is we use altnamespace
         if not folder_name == "INBOX":
@@ -147,30 +148,49 @@ class BonnieCollector(object):
         for message_uid in message_uids:
             message_file_path = "%s/%s." % (mailbox_path, message_uid)
 
-            print message_file_path
+            log.debug("Open message file: %r" % (message_file_path), level=8)
 
             if os.access(message_file_path, os.R_OK):
                 fp = open(message_file_path, 'r')
                 data = fp.read()
                 fp.close()
 
-                print data
-
+                # TODO: parse mime message and return a dict
                 messageContents[message_uid] = data
 
         notification['messageContent'] = messageContents
 
-        notification = json.dumps(notification)
+        return json.dumps(notification)
 
-        return notification
+    def retrieve_headers_for_messages(self, notification):
+        messageHeaders = {}
 
-    def event_notification(self, notification):
+        notification = json.loads(notification)
+        log.debug("HEADERS for %r" % (notification), level=9)
+
+        # TODO: resovle message file system path
+        # TODO: read file line by line until we reach an empty line
+        # TODO: decode quoted-pritable or base64 encoded headers
+
+        notification['messageHeaders'] = messageHeaders
+
+        return json.dumps(notification)
+
+    def execute(self, command, notification):
         """
             Our goal is to collect whatever message contents
             for the messages referenced in the notification.
         """
-        print "going to run with", notification
-        notification = self.retrieve_contents_for_messages(notification)
+        log.debug("Executing collection command %s" % (command), level=8)
+        if command == "FETCH":
+            notification = self.retrieve_contents_for_messages(notification)
+        elif command == "HEADER":
+            notification = self.retrieve_headers_for_messages(notification)
+        elif command == "GETMETADATA":
+            pass
+        elif command == "GETACL":
+            pass
+
         return notification
         #self.output(notification)
 
@@ -181,5 +201,5 @@ class BonnieCollector(object):
         input_modules = conf.get('collector', 'input_modules')
         for _input in self.input_modules.keys():
             if _input.name() == input_modules:
-                _input.run(callback=self.event_notification)
+                _input.run(callback=self.execute)
 
