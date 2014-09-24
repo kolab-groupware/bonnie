@@ -26,18 +26,52 @@ class ElasticSearchOutput(object):
     def register(self, callback):
         callback({'_all': { 'callback': self.run }})
 
-    def run(self, notification):
-        #print "es output for:", notification
-        # The output should have UTC timestamps, but gets "2014-05-16T12:55:53.870+02:00"
-        timestamp = notification['timestamp']
-        notification['@timestamp'] = datetime.datetime.strftime(parse(timestamp).astimezone(tzutc()), "%Y-%m-%dT%H:%M:%S.%fZ")
+    def notification2log(self, notification):
+        """
+            Convert the given event notification record into a valid log entry
+        """
+        keymap = {
+            'timestamp':    None,
+            'clientIP':     'client_ip',
+            'clientPort':   None,
+            'serverPort':   None,
+            'serverDomain': 'domain',
+            'aclRights':    'acl_rights',
+            'aclSubject':   'acl_subject',
+            'mailboxID':    'mailbox_id',
+            'messageSize':  'message_size',
+            'messageHeaders': 'message_headers',
+            'messageContent': 'message',
+            'flagNames':    'flag_names',
+            'diskUsed':     'disk_used',
+            'vnd.cmu.oldUidset': 'uidset',
+        }
+        log = { '@version': bonnie.API_VERSION }
+        for key,val in notification.iteritems():
+            newkey = keymap[key] if keymap.has_key(key) else key
+            if newkey is not None:
+                # convert NIL values into None which is more appropriate
+                if isinstance(val, list):
+                    val = [x for x in val if not x == "NIL"]
+                elif val == "NIL":
+                    val = None
 
-        # Delete the former timestamp
-        del notification['timestamp']
+                log[newkey] = val
+
+        return log
+
+    def run(self, notification):
+        # The output should have UTC timestamps, but gets "2014-05-16T12:55:53.870+02:00"
+        try:
+            timestamp = parse(notification['timestamp']).astimezone(tzutc())
+        except:
+            timestamp = datetime.datetime.now(tzutc())
+
+        notification['@timestamp'] = datetime.datetime.strftime(timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
 
         self.es.create(
-                index='logstash-%s' % (datetime.datetime.strftime(parse(timestamp).astimezone(tzutc()), "%Y-%m-%d")),
+                index='logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y-%m-%d")),
                 doc_type='logs',
-                body=notification
+                body=self.notification2log(notification)
             )
         return (notification, [])
