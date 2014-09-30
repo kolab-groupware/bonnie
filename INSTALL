@@ -28,7 +28,8 @@ EOF
         elasticsearch \
         python-elasticsearch \
         python-nosetests \
-        python-zmq
+        python-zmq \
+        python-twisted-core
 
 #.  chmod 755 /root/
 
