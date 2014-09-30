@@ -27,10 +27,14 @@ import subprocess
 import time
 import urllib
 import urlparse
-
 import inputs
 
+from email import message_from_string
+
 import bonnie
+from bonnie.utils import parse_imap_uri
+from bonnie.utils import mail_message2dict
+
 conf = bonnie.getConf()
 log = bonnie.getLogger('collector')
 
@@ -43,7 +47,7 @@ class BonnieCollector(object):
             __class = _class()
             self.input_modules[__class] = __class.register(callback=self.register_input)
 
-    def expand_uidset(uidset):
+    def expand_uidset(self, uidset):
         _uids = []
         for _uid in uidset.split(','):
             if len(_uid.split(':')) > 1:
@@ -54,47 +58,17 @@ class BonnieCollector(object):
 
         return _uids
 
-    def retrieve_contents_for_messages(self, notification):
-        messageContents = {}
+    def get_imap_folder_path(self, uri):
+        """
+            Translate the folder name in to a fully qualified folder path such as it
+            would be used by a cyrus administrator.
+        """
+        if isinstance(uri, str):
+            uri = parse_imap_uri(uri)
 
-        notification = json.loads(notification)
-        log.debug("FETCH for %r" % (notification), level=9)
-
-        split_uri = urlparse.urlsplit(notification['uri'])
-
-        if len(split_uri.netloc.split('@')) == 3:
-            (username, domain, server) = split_uri.netloc.split('@')
-        elif len(split_uri.netloc.split('@')) == 2:
-            (username, server) = split_uri.netloc.split('@')
-            domain = None
-        elif len(split_uri.netloc.split('@')) == 1:
-            username = None
-            domain = None
-            server = split_uri.netloc
-
-        # First, .path == '/Calendar/Personal%20Calendar;UIDVALIDITY=$x[/;UID=$y]
-        # Take everything after the first slash, and omit any INBOX/ stuff.
-        path_part = '/'.join([x for x in split_uri.path.split('/') if not x == "INBOX"][1:])
-
-        # Second, .path == 'Calendar/Personal%20Calendar;UIDVALIDITY=$x[/;UID=$y]
-        # Take everything before the first ';' (but only actually take everything
-        # before the first ';' in the next step, here we still have use for it).
-        # TODO: parse the path/query parameters into a dict
-        path_part = path_part.split(';')
-
-        if notification.has_key('uidset'):
-            message_uids = expand_uidset(notification['uidset'])
-        elif notification.has_key('vnd.cmu.oldUidset'):
-            message_uids = expand_uidset(notification['vnd.cmu.oldUidset'])
-        elif len(path_part) == 3:
-            # Use or abuse the length of path_parts at this moment to extract the message UID
-            message_uids = [ path_part[2].split('=')[1] ]
-            notification['uidset'] = message_uids
-
-
-        # Third, .path == 'Calendar/Personal%20Calendar
-        # Decode the url encoding
-        folder_name = urllib.unquote(path_part[0])
+        username = uri['user']
+        domain = uri['domain']
+        folder_name = uri['path']
 
         # Through filesystem
         # To get the mailbox path, use:
@@ -111,9 +85,9 @@ class BonnieCollector(object):
         # TODO: Shared Folders.
         if not username == None:
             if folder_name == "INBOX":
-                folder_path = 'user/%s@%s' % (username, domain)
+                folder_path = os.path.join('user', '/%s@%s' % (username, domain))
             else:
-                folder_path = 'user/%s/%s@%s' % (username, folder_name, domain)
+                folder_path = os.path.join('user', username, '%s@%s' % (folder_name, domain))
         else:
             folder_path = folder_name
 
@@ -123,9 +97,6 @@ class BonnieCollector(object):
             mailbox_path = subprocess.check_output(
                     ["/usr/lib/cyrus-imapd/mbpath", folder_path]
                 ).strip()
-
-            log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
-
         else:
             # Do it the old-fashioned way
             p1 = subprocess.Popen(
@@ -135,14 +106,35 @@ class BonnieCollector(object):
                 )
 
             (stdout, stderr) = p1.communicate()
-
             mailbox_path = stdout.strip()
-            log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
 
         # TODO: Assumption #4 is we use altnamespace
         if not folder_name == "INBOX":
             if not len(folder_name.split('@')) > 0:
-                mailbox_path = "%s/%s" % (mailbox_path, folder_name)
+                mailbox_path = os.path.join(mailbox_path, folder_name)
+
+        return mailbox_path
+
+    def retrieve_contents_for_messages(self, notification):
+        messageContents = {}
+
+        notification = json.loads(notification)
+        log.debug("FETCH for %r" % (notification), level=9)
+
+        # split the uri parameter into useful parts
+        uri = parse_imap_uri(notification['uri'])
+
+        if notification.has_key('uidset'):
+            message_uids = self.expand_uidset(notification['uidset'])
+        elif notification.has_key('vnd.cmu.oldUidset'):
+            message_uids = self.expand_uidset(notification['vnd.cmu.oldUidset'])
+        elif uri.has_key('UID'):
+            message_uids = [ uri['UID'] ]
+            notification['uidset'] = message_uids
+
+        # resolve uri into a mailbox path on the local file stystem
+        mailbox_path = self.get_imap_folder_path(uri)
+        log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
 
         # using message file path /var/spool/imap/domain/e/example.org/k/lists/kolab^org/devel/lists/kolab.org/devel@example.org/1.
         for message_uid in message_uids:
@@ -155,8 +147,8 @@ class BonnieCollector(object):
                 data = fp.read()
                 fp.close()
 
-                # TODO: parse mime message and return a dict
-                messageContents[message_uid] = data
+                # parse mime message and return a dict
+                messageContents[message_uid] = mail_message2dict(data)
 
         notification['messageContent'] = messageContents
 
@@ -168,9 +160,46 @@ class BonnieCollector(object):
         notification = json.loads(notification)
         log.debug("HEADERS for %r" % (notification), level=9)
 
-        # TODO: resovle message file system path
-        # TODO: read file line by line until we reach an empty line
-        # TODO: decode quoted-pritable or base64 encoded headers
+        # split the uri parameter into useful parts
+        uri = parse_imap_uri(notification['uri'])
+
+        if notification.has_key('uidset'):
+            message_uids = self.expand_uidset(notification['uidset'])
+        elif notification.has_key('vnd.cmu.oldUidset'):
+            message_uids = self.expand_uidset(notification['vnd.cmu.oldUidset'])
+        elif uri.has_key('UID'):
+            message_uids = [ uri['UID'] ]
+            notification['uidset'] = message_uids
+
+        # resolve uri into a mailbox path on the local file stystem
+        mailbox_path = self.get_imap_folder_path(uri)
+        log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
+
+        for message_uid in message_uids:
+            message_file_path = "%s/%s." % (mailbox_path, message_uid)
+
+            log.debug("Open message file: %r" % (message_file_path), level=8)
+
+            # read file line by line until we reach an empty line
+            if os.access(message_file_path, os.R_OK):
+                data = ''
+                fp = open(message_file_path, 'r')
+                for line in fp:
+                    data += line
+                    if line.strip() == '':
+                        break;
+
+                fp.close()
+
+                # use email lib to parse message headers
+                try:
+                    message = message_from_string(data)
+                    headers = dict(message.items())
+                except Exception, e:
+                    log.warning("Failed to parse MIME message headers: %r", e)
+                    headers = data
+
+                messageHeaders[message_uid] = headers
 
         notification['messageHeaders'] = messageHeaders
 

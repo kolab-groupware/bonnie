@@ -1,0 +1,95 @@
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="=_ddac4015cd2f0b6b232ed6f53d8bd55b"
+From: john.doe@example.org
+To: john.doe@example.org
+Date: Wed, 24 Sep 2014 06:52:00 +0200
+X-Kolab-Type: application/x-vnd.kolab.event
+X-Kolab-Mime-Version: 3.0
+Subject: 253E800C973E9FB99D174669001DB19B-FCBB6C4091F28CA0
+User-Agent: Kolab 3.1/Roundcube 1.1-git
+
+--=_ddac4015cd2f0b6b232ed6f53d8bd55b
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset=ISO-8859-1
+
+This is a Kolab Groupware object. To view this object you will need an emai=
+l client that understands the Kolab Groupware format. For a list of such em=
+ail clients please visit http://www.kolab.org/
+
+
+--=_ddac4015cd2f0b6b232ed6f53d8bd55b
+Content-Transfer-Encoding: 8bit
+Content-Type: application/calendar+xml; charset=UTF-8; name=kolab.xml
+Content-Disposition: attachment;
+ filename=kolab.xml;
+ size=1864
+
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<icalendar xmlns="urn:ietf:params:xml:ns:icalendar-2.0">
+
+  <vcalendar>
+    <properties>
+      <prodid>
+        <text>Roundcube-libkolab-1.1 Libkolabxml-1.1</text>
+      </prodid>
+      <version>
+        <text>2.0</text>
+      </version>
+      <x-kolab-version>
+        <text>3.1.0</text>
+      </x-kolab-version>
+    </properties>
+    <components>
+      <vevent>
+        <properties>
+          <uid>
+            <text>253E800C973E9FB99D174669001DB19B-FCBB6C4091F28CA0</text>
+          </uid>
+          <created>
+            <date-time>2014-09-23T23:31:23Z</date-time>
+          </created>
+          <dtstamp>
+            <date-time>2014-09-24T04:52:00Z</date-time>
+          </dtstamp>
+          <sequence>
+            <integer>3</integer>
+          </sequence>
+          <class>
+            <text>PUBLIC</text>
+          </class>
+          <dtstart>
+            <parameters>
+              <tzid>
+                <text>/kolab.org/Europe/Berlin</text>
+              </tzid>
+            </parameters>
+            <date-time>2014-09-26T14:00:00</date-time>
+          </dtstart>
+          <dtend>
+            <parameters>
+              <tzid>
+                <text>/kolab.org/Europe/Berlin</text>
+              </tzid>
+            </parameters>
+            <date-time>2014-09-26T15:00:00</date-time>
+          </dtend>
+          <summary>
+            <text>Test</text>
+          </summary>
+          <organizer>
+            <parameters>
+              <cn>
+                <text>Doe, John</text>
+              </cn>
+            </parameters>
+            <cal-address>mailto:%3Cjohn.doe%40example.org%3E</cal-address>
+          </organizer>
+        </properties>
+      </vevent>
+    </components>
+  </vcalendar>
+
+</icalendar>
+
+--=_ddac4015cd2f0b6b232ed6f53d8bd55b--
