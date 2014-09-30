@@ -24,7 +24,7 @@
 from bonnie.worker.handlers import MessageHandlerBase
 
 class MessageMoveHandler(MessageHandlerBase):
-    event = 'MessageMove'
+    event = 'vnd.cmu.MessageMove'
 
     def __init__(self, *args, **kw):
         MessageHandlerBase.__init__(self, *args, **kw)
