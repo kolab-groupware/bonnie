@@ -54,6 +54,15 @@ class TestBonnieCollector(unittest.TestCase):
         self.assertIsInstance(notification['metadata'], dict)
         self.assertEqual(notification['metadata']['/shared/vendor/kolab/folder-type'], 'event')
 
+    def test_get_imap_folder_acl(self):
+        coll = IMAPDataHandler()
+        notification = { 'uri': 'imap://john.doe@example.org@kolab.example.org/Calendar' }
+        notification = json.loads(coll.get_imap_folder_acl(json.dumps(notification)))
+
+        self.assertTrue(notification.has_key('acl'))
+        self.assertIsInstance(notification['acl'], dict)
+        self.assertEqual(notification['acl']['john.doe@example.org'], 'lrswipkxtecdan')
+
     def test_zz_execute(self):
         coll = BonnieCollector()
 
@@ -70,3 +79,6 @@ class TestBonnieCollector(unittest.TestCase):
 
         result = json.loads(coll.execute('GETMETADATA', json.dumps(notification)))
         self.assertTrue(result.has_key('metadata'))
+
+        result = json.loads(coll.execute('GETACL', json.dumps(notification)))
+        self.assertTrue(result.has_key('acl'))

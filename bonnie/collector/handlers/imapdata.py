@@ -39,9 +39,12 @@ class IMAPDataHandler(object):
         if not hasattr(conf, 'defaults'):
             conf.finalize_conf()
 
+        self.imap = IMAP()
+
     def register(self, callback):
         interests = {
-            'GETMETADATA':  { 'callback': self.get_imap_folder_metadata }
+            'GETMETADATA':  { 'callback': self.get_imap_folder_metadata },
+            'GETACL':  { 'callback': self.get_imap_folder_acl }
         }
 
         callback(interests)
@@ -57,14 +60,33 @@ class IMAPDataHandler(object):
         # get metadata using pykolab's imap module
         metadata = {}
         try:
-            imap = IMAP()
-            imap.connect()
-            metadata = imap.get_metadata(folder_path)[folder_path]
-            imap.disconnect()
+            self.imap.connect()
+            metadata = self.imap.get_metadata(folder_path)[folder_path]
+            self.imap.disconnect()
         except Exception, e:
-            print e
             log.warning("Failed to get metadata for %r: %r", folder_path, e)
 
         notification['metadata'] = metadata
+
+        return json.dumps(notification)
+
+    def get_imap_folder_acl(self, notification):
+        notification = json.loads(notification)
+        log.debug("GETACL for %r" % (notification), level=9)
+
+        # split the uri parameter into useful parts
+        uri = parse_imap_uri(notification['uri'])
+        folder_path = imap_folder_path(uri)
+
+        # get folder acls using pykolab's imap module
+        acls = {}
+        try:
+            self.imap.connect()
+            acls = self.imap.list_acls(folder_path)
+            self.imap.disconnect()
+        except Exception, e:
+            log.warning("Failed to get ACLs for %r: %r", folder_path, e)
+
+        notification['acl'] = acls
 
         return json.dumps(notification)

@@ -32,7 +32,7 @@ class MailboxCreateHandler(HandlerBase):
         self.log = bonnie.getLogger('worker.' + self.event)
 
     def run(self, notification):
-        # message notifications require message headers
+        # mailbox notifications require metadata
         if not notification.has_key('metadata'):
             self.log.debug("Adding GETMETADATA job for " + self.event, level=8)
             return (notification, [ b"GETMETADATA" ])
