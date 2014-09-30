@@ -21,10 +21,11 @@
     Base handler for an event notification of type 'MessageTrash'
 """
 
-from bonnie.worker.handlers import HandlerBase
+import bonnie
+from bonnie.worker.handlers import MessageHandlerBase
 
-class MessageTrashHandler(HandlerBase):
+class MessageTrashHandler(MessageHandlerBase):
     event = 'MessageTrash'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
+        MessageHandlerBase.__init__(self, *args, **kw)

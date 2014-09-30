@@ -21,27 +21,19 @@
     Base handler for an event notification of type 'MessageAppend'
 """
 
-from bonnie.worker.handlers import HandlerBase
+import bonnie
+from bonnie.worker.handlers import MessageHandlerBase
 
-class MessageAppendHandler(HandlerBase):
+class MessageAppendHandler(MessageHandlerBase):
     event = 'MessageAppend'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
-
-    def register(self, callback):
-        interests = {
-                self.event: {
-                        'callback': self.run,
-                    }
-            }
-
-        callback(interests)
+        MessageHandlerBase.__init__(self, *args, **kw)
 
     def run(self, notification):
         if notification.has_key('messageContent') and not notification['messageContent'] in [None, ""]:
             return (notification, [])
 
-        print "adding a job for messageappend"
+        self.log.debug("Adding FETCH job for MessageAppend", level=8)
         jobs = [ b"FETCH" ]
         return (notification, jobs)

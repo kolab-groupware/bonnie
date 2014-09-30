@@ -1,6 +1,6 @@
 MIME-Version: 1.0
-From: "Jane" <jane.doe@example.org>
-To: "John Doe" <john.doe@example.org>
+From: "John Doe" <john.doe@example.org>
+To: =?UTF-8?Q?Br=C3=BCderli=2C_Thomas?= <thomas.bruederli@example.org>, Jane <jane@example.org>
 Date: Wed, 24 Sep 2014 06:52:00 +0200
 Subject: Test
 User-Agent: Kolab 3.1/Roundcube 1.1-git

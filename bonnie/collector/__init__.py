@@ -32,8 +32,10 @@ import inputs
 from email import message_from_string
 
 import bonnie
+from bonnie.utils import expand_uidset
 from bonnie.utils import parse_imap_uri
 from bonnie.utils import mail_message2dict
+from bonnie.utils import decode_message_headers
 
 conf = bonnie.getConf()
 log = bonnie.getLogger('collector')
@@ -46,17 +48,6 @@ class BonnieCollector(object):
         for _class in inputs.list_classes():
             __class = _class()
             self.input_modules[__class] = __class.register(callback=self.register_input)
-
-    def expand_uidset(self, uidset):
-        _uids = []
-        for _uid in uidset.split(','):
-            if len(_uid.split(':')) > 1:
-                for __uid in range((int)(_uid.split(':')[0]), (int)(_uid.split(':')[1])+1):
-                    _uids.append("%d" % (__uid))
-            else:
-                _uids.append(str(_uid))
-
-        return _uids
 
     def get_imap_folder_path(self, uri):
         """
@@ -117,6 +108,7 @@ class BonnieCollector(object):
 
     def retrieve_contents_for_messages(self, notification):
         messageContents = {}
+        messageHeaders = {}
 
         notification = json.loads(notification)
         log.debug("FETCH for %r" % (notification), level=9)
@@ -125,12 +117,12 @@ class BonnieCollector(object):
         uri = parse_imap_uri(notification['uri'])
 
         if notification.has_key('uidset'):
-            message_uids = self.expand_uidset(notification['uidset'])
+            message_uids = expand_uidset(notification['uidset'])
         elif notification.has_key('vnd.cmu.oldUidset'):
-            message_uids = self.expand_uidset(notification['vnd.cmu.oldUidset'])
+            message_uids = expand_uidset(notification['vnd.cmu.oldUidset'])
         elif uri.has_key('UID'):
             message_uids = [ uri['UID'] ]
-            notification['uidset'] = message_uids
+            notification['uidset'] = ','.join(message_uids)
 
         # resolve uri into a mailbox path on the local file stystem
         mailbox_path = self.get_imap_folder_path(uri)
@@ -147,10 +139,22 @@ class BonnieCollector(object):
                 data = fp.read()
                 fp.close()
 
-                # parse mime message and return a dict
-                messageContents[message_uid] = mail_message2dict(data)
+                # use email lib to parse message headers
+                try:
+                    # find header delimiter
+                    pos = data.find("\r\n\r\n")
+                    print "Message Headers:", pos, data[0:pos]
+                    message = message_from_string(data[0:pos])
+                    headers = decode_message_headers(message)
+                except:
+                    headers = dict()
+
+                # append raw message data and parsed headers
+                messageContents[message_uid] = data
+                messageHeaders[message_uid] = headers
 
         notification['messageContent'] = messageContents
+        notification['messageHeaders'] = messageHeaders
 
         return json.dumps(notification)
 
@@ -164,12 +168,12 @@ class BonnieCollector(object):
         uri = parse_imap_uri(notification['uri'])
 
         if notification.has_key('uidset'):
-            message_uids = self.expand_uidset(notification['uidset'])
+            message_uids = expand_uidset(notification['uidset'])
         elif notification.has_key('vnd.cmu.oldUidset'):
-            message_uids = self.expand_uidset(notification['vnd.cmu.oldUidset'])
+            message_uids = expand_uidset(notification['vnd.cmu.oldUidset'])
         elif uri.has_key('UID'):
             message_uids = [ uri['UID'] ]
-            notification['uidset'] = message_uids
+            notification['uidset'] = ','.join(message_uids)
 
         # resolve uri into a mailbox path on the local file stystem
         mailbox_path = self.get_imap_folder_path(uri)
@@ -194,7 +198,7 @@ class BonnieCollector(object):
                 # use email lib to parse message headers
                 try:
                     message = message_from_string(data)
-                    headers = dict(message.items())
+                    headers = decode_message_headers(message)
                 except Exception, e:
                     log.warning("Failed to parse MIME message headers: %r", e)
                     headers = data

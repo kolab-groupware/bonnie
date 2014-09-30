@@ -1,10 +1,32 @@
 import urllib
 import urlparse
+import datetime
+from dateutil.parser import parse as parse_date
+from dateutil.tz import tzutc
+
 from email import message_from_string
+from email.header import decode_header
+from email.utils import getaddresses
 
 import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('utils')
+
+
+def expand_uidset(uidset):
+    """
+        Expand the given UID set string into a complete set of values
+        Examples: 1,2,5 => [1,2,5] or 1:4 => [1,2,3,4]
+    """
+    _uids = []
+    for _uid in uidset.split(','):
+        if len(_uid.split(':')) > 1:
+            for __uid in range((int)(_uid.split(':')[0]), (int)(_uid.split(':')[1])+1):
+                _uids.append("%d" % (__uid))
+        else:
+            _uids.append(str(_uid))
+
+    return _uids
 
 
 def parse_imap_uri(uri):
@@ -41,6 +63,45 @@ def parse_imap_uri(uri):
     return result
 
 
+def decode_message_headers(message):
+    """
+        Copy headers from the given message object into a dict
+        structure and normalize the values into UTF-8 strings
+    """
+    headers = dict(message.items())
+
+    # split recipient headers into lists
+    for h in ['From','To','Cc','Bcc']:
+        if headers.has_key(h):
+            headers[h] = ['%s <%s>' % (name,address) for name,address in getaddresses(message.get_all(h))]
+
+    # decode header values into UTF-8
+    for k,value in headers.iteritems():
+        if isinstance(value, list):
+            headers[k] = [_decode_mime_header(x) for x in value]
+        else:
+            headers[k] = _decode_mime_header(value)
+
+    # add some normalized header values good for searching
+    headers['@Content-Type'] = message.get_content_type()
+
+    # convert Date into UTC
+    if headers.has_key('Date'):
+        try:
+            date = parse_date(headers['Date']).astimezone(tzutc())
+            headers['@Date'] = datetime.datetime.strftime(date, "%Y-%m-%dT%H:%M:%SZ")
+        except:
+            pass
+
+    return headers
+
+def _decode_mime_header(value):
+    """
+        Helper method to decode a single header string
+    """
+    return ' '.join(unicode(raw, charset) if charset is not None else raw for raw,charset in decode_header(value))
+
+
 def mail_message2dict(data):
     """
         Parse the given MIME message and return its contents as a dict
@@ -51,25 +112,25 @@ def mail_message2dict(data):
         log.warning("Failed to parse MIME message: %r", e)
         return dict(_data=data)
 
-    result = dict(message.items())
+    result = decode_message_headers(message)
 
     if message.is_multipart():
         for mime_part in message.walk():
             # skip top level part
-            if not result.has_key('_parts'):
-                result['_parts'] = []
+            if not result.has_key('@parts'):
+                result['@parts'] = []
                 continue
 
             part = dict(mime_part.items())
-            part['_data'] = mime_part.get_payload()
+            part['@body'] = mime_part.get_payload()
 
             # convert payload into actual string data
-            if isinstance(part['_data'], list):
-                part['_data'] = (str(x) for x in part['_data'])
+            if isinstance(part['@body'], list):
+                part['@body'] = (str(x) for x in part['@body'])
 
-            result['_parts'].append(part)
+            result['@parts'].append(part)
     else:
-        result['_data'] = message.get_payload()
+        result['@body'] = message.get_payload()
 
     return result
     

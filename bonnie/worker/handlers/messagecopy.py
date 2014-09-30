@@ -21,10 +21,10 @@
     Base handler for an event notification of type 'MessageCopy'
 """
 
-from bonnie.worker.handlers import HandlerBase
+from bonnie.worker.handlers import MessageHandlerBase
 
-class MessageCopyHandler(HandlerBase):
+class MessageCopyHandler(MessageHandlerBase):
     event = 'MessageCopy'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
+        MessageHandlerBase.__init__(self, *args, **kw)

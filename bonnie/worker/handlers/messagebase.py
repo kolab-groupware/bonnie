@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
-# Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli <bruederli at kolabsys.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,13 +18,24 @@
 #
 
 """
-    Base handler for an event notification of type 'MessageNew'
+    Base handler for an event notification of type 'Message*'
 """
 
-from bonnie.worker.handlers import MessageHandlerBase
+import bonnie
+from bonnie.worker.handlers import HandlerBase
 
-class MessageNewHandler(MessageHandlerBase):
-    event = 'MessageNew'
+class MessageHandlerBase(HandlerBase):
+    event = None
 
     def __init__(self, *args, **kw):
-        MessageHandlerBase.__init__(self, *args, **kw)
+        HandlerBase.__init__(self, *args, **kw)
+        self.log = bonnie.getLogger('worker.' + self.event)
+
+    def run(self, notification):
+        # message notifications require message headers
+        if notification.has_key('messageHeaders'):
+            return (notification, [])
+
+        self.log.debug("Adding HEADER job for " + self.event, level=8)
+        jobs = [ b"HEADER" ]
+        return (notification, jobs)

@@ -17,6 +17,7 @@ from mailboxdelete import MailboxDeleteHandler
 from mailboxrename import MailboxRenameHandler
 from mailboxsubscribe import MailboxSubscribeHandler
 from mailboxunsubscribe import MailboxUnsubscribeHandler
+from messagebase import MessageHandlerBase
 from messageappend import MessageAppendHandler
 from messagecopy import MessageCopyHandler
 from messageexpire import MessageExpireHandler

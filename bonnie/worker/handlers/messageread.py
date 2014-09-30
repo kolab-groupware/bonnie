@@ -21,10 +21,10 @@
     Base handler for an event notification of type 'MessageRead'
 """
 
-from bonnie.worker.handlers import HandlerBase
+from bonnie.worker.handlers import MessageHandlerBase
 
-class MessageReadHandler(HandlerBase):
+class MessageReadHandler(MessageHandlerBase):
     event = 'MessageRead'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
+        MessageHandlerBase.__init__(self, *args, **kw)

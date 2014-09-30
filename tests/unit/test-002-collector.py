@@ -23,12 +23,6 @@ class TestBonnieCollector(unittest.TestCase):
         path = coll.get_imap_folder_path("imap://john.doe@example.org@kolab.example.org/Calendar/Personal%20Calendar;UID=3")
         self.assertEqual(path, "/var/spool/imap/domain/e/example.org/j/user/john^doe/Calendar/Personal Calendar")
 
-    def test_expand_uidset(self):
-        coll = BonnieCollector()
-        self.assertEqual(coll.expand_uidset('3'), ['3'])
-        self.assertEqual(coll.expand_uidset('3,5'), ['3','5'])
-        self.assertEqual(coll.expand_uidset('3:5'), ['3','4','5'])
-
     def test_retrieve_headers_for_messages(self):
         self._patch_imap_folder_path()
         coll = BonnieCollector()
@@ -42,7 +36,7 @@ class TestBonnieCollector(unittest.TestCase):
         headers = notification['messageHeaders']['3']
         self.assertIsInstance(headers, dict)
         self.assertEqual(headers['Subject'], 'Test')
-        self.assertEqual(headers['From'], '"Jane" <jane.doe@example.org>')
+        self.assertEqual(headers['From'][0], 'John Doe <john.doe@example.org>')
 
     def test_retrieve_contents_for_messages(self):
         self._patch_imap_folder_path()
@@ -53,8 +47,12 @@ class TestBonnieCollector(unittest.TestCase):
         self.assertTrue(notification.has_key('messageContent'))
         self.assertIsInstance(notification['messageContent'], dict)
         self.assertTrue(notification['messageContent'].has_key('3'))
-        self.assertIsInstance(notification['messageContent']['3'], dict)
-        # messageContent structure is covered by TestBonnieUtils.test_mail_message2dict
+        self.assertIsInstance(notification['messageContent']['3'], unicode)
+
+        self.assertTrue(notification.has_key('messageHeaders'))
+        self.assertIsInstance(notification['messageHeaders'], dict)
+        self.assertTrue(notification['messageHeaders'].has_key('3'))
+        self.assertIsInstance(notification['messageHeaders']['3'], dict)
 
     def test_execute(self):
         self._patch_imap_folder_path()
@@ -65,7 +63,7 @@ class TestBonnieCollector(unittest.TestCase):
 
         self.assertTrue(result.has_key('messageContent'))
         self.assertTrue(result.has_key('uidset'))
-        self.assertEqual(result['uidset'], ['3'])
+        self.assertEqual(result['uidset'], '3')
 
         notification['vnd.cmu.oldUidset'] = '3'
         result = json.loads(coll.execute('HEADER', json.dumps(notification)))

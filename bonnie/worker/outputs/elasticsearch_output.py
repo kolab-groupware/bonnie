@@ -40,11 +40,12 @@ class ElasticSearchOutput(object):
             'aclSubject':   'acl_subject',
             'mailboxID':    'mailbox_id',
             'messageSize':  'message_size',
-            'messageHeaders': 'message_headers',
-            'messageContent': 'message',
+            'messageHeaders': None,
+            'messageContent': None,
+            'bodyStructure':  None,
             'flagNames':    'flag_names',
             'diskUsed':     'disk_used',
-            'vnd.cmu.oldUidset': 'uidset',
+            'vnd.cmu.oldUidset': 'olduidset',
         }
         log = { '@version': bonnie.API_VERSION }
         for key,val in notification.iteritems():
@@ -68,10 +69,27 @@ class ElasticSearchOutput(object):
             timestamp = datetime.datetime.now(tzutc())
 
         notification['@timestamp'] = datetime.datetime.strftime(timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
+        index = 'logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y-%m-%d"))
 
-        self.es.create(
-                index='logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y-%m-%d")),
+        # for notifications concerning multiple messages, create entries for each message
+        if notification.has_key('messageHeaders') and isinstance(notification['messageHeaders'], dict):
+            for uid,headers in notification['messageHeaders'].iteritems():
+                notification['uidset']  = uid
+                notification['headers'] = headers
+                notification['message'] = None
+                if notification.has_key('messageContent') and notification['messageContent'].has_key(uid):
+                    notification['message'] = notification['messageContent'][uid]
+
+                self.es.create(
+                    index=index,
+                    doc_type='logs',
+                    body=self.notification2log(notification)
+                )
+        else:
+            self.es.create(
+                index=index,
                 doc_type='logs',
                 body=self.notification2log(notification)
             )
+
         return (notification, [])
