@@ -31,9 +31,9 @@ class MessageAppendHandler(MessageHandlerBase):
         MessageHandlerBase.__init__(self, *args, **kw)
 
     def run(self, notification):
-        if notification.has_key('messageContent') and not notification['messageContent'] in [None, ""]:
-            return (notification, [])
+        if not notification.has_key('messageContent') or notification['messageContent'] in [None, ""]:
+            self.log.debug("Adding FETCH job for MessageAppend", level=8)
+            return (notification, [ b"FETCH" ])
 
-        self.log.debug("Adding FETCH job for MessageAppend", level=8)
-        jobs = [ b"FETCH" ]
-        return (notification, jobs)
+        return (notification, [])
+

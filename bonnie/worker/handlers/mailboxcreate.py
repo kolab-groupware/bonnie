@@ -21,6 +21,7 @@
     Base handler for an event notification of type 'MailboxCreate'
 """
 
+import bonnie
 from bonnie.worker.handlers import HandlerBase
 
 class MailboxCreateHandler(HandlerBase):

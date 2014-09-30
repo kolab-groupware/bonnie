@@ -72,7 +72,7 @@ class ElasticSearchOutput(object):
         index = 'logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y-%m-%d"))
 
         # for notifications concerning multiple messages, create entries for each message
-        if notification.has_key('messageHeaders') and isinstance(notification['messageHeaders'], dict):
+        if notification.has_key('messageHeaders') and isinstance(notification['messageHeaders'], dict) and len(notification['messageHeaders']) > 0:
             for uid,headers in notification['messageHeaders'].iteritems():
                 notification['uidset']  = uid
                 notification['headers'] = headers
