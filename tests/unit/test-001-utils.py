@@ -4,6 +4,8 @@ from bonnie.utils import expand_uidset
 from bonnie.utils import parse_imap_uri
 from bonnie.utils import mail_message2dict
 from bonnie.utils import decode_message_headers
+from bonnie.utils import imap_folder_path
+from bonnie.utils import imap_mailbox_fs_path
 from email import message_from_string
 from twisted.trial import unittest
 
@@ -59,4 +61,15 @@ class TestBonnieUtils(unittest.TestCase):
         message2 = mail_message2dict("FOO")
         self.assertIsInstance(message2, dict)
         self.assertEqual(message2['@body'], "FOO")
-        
+
+    def test_imap_folder_path(self):
+        p1 = imap_folder_path("imap://john.doe@example.org@kolab.example.org/Calendar;UID=3")
+        self.assertEqual(p1, "user/john.doe/Calendar@example.org")
+
+        # TODO: test shared folders (but how are they referred in the uri?)
+        #p2 = imap_folder_path("imap://john.doe@example.org@kolab.example.org/Calendar;UID=3")
+        #self.assertEqual(p2, "shared/Project-X@example.org")
+
+    def test_imap_mailbox_fs_path(self):
+        path = imap_mailbox_fs_path("imap://john.doe@example.org@kolab.example.org/Calendar/Personal%20Calendar;UID=3")
+        self.assertEqual(path, "/var/spool/imap/domain/e/example.org/j/user/john^doe/Calendar/Personal Calendar")

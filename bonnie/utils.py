@@ -1,6 +1,9 @@
+import os
 import urllib
 import urlparse
 import datetime
+import subprocess
+
 from dateutil.parser import parse as parse_date
 from dateutil.tz import tzutc
 
@@ -133,4 +136,84 @@ def mail_message2dict(data):
         result['@body'] = message.get_payload()
 
     return result
+
+
+def imap_folder_path(uri):
+    """
+        Translate the folder name into a fully qualified folder path such as it
+        would be used by a cyrus administrator.
+    """
+    if isinstance(uri, str):
+        uri = parse_imap_uri(uri)
+
+    username = uri['user']
+    domain = uri['domain']
+    folder_name = uri['path']
+
+    # Through filesystem
+    # To get the mailbox path, use:
+    # TODO: Assumption #1 is we are using virtual domains, and this domain does
+    # TODO: Assumption #2 is the mailbox in question is a user mailbox
+    # TODO: Assumption #3 is we use the unix hierarchy separator
+
+    # Translate the folder name in to a fully qualified folder path such as it
+    # would be used by a cyrus administrator.
+    #
+    # TODO: Other Users (covered, the netloc has the username the suffix is the
+    # original folder name).
+    #
+    # TODO: Shared Folders.
+    if not username == None:
+        if folder_name == "INBOX":
+            folder_path = os.path.join('user', '/%s@%s' % (username, domain))
+        else:
+            folder_path = os.path.join('user', username, '%s@%s' % (folder_name, domain))
+    else:
+        folder_path = folder_name
+
+    return folder_path
+
+
+def imap_mailbox_fs_path(uri):
+    """
+        Translate the given folder URI into a filesystem path where this mailbox is stored.
+    """
+    if isinstance(uri, str):
+        uri = parse_imap_uri(uri)
+
+    folder_name = uri['path']
+
+    # Translate the folder name in to a fully qualified folder path such as it
+    # would be used by a cyrus administrator.
+    folder_path = imap_folder_path(uri)
+
+    # Through filesystem
+    # To get the mailbox path, use:
+    # TODO: Assumption #1 is we are using virtual domains, and this domain does
+    # TODO: Assumption #2 is the mailbox in question is a user mailbox
+    # TODO: Assumption #3 is we use the unix hierarchy separator
+
+    # TODO: Check if this file exists and is actually executable
+    # New in Python 2.7:
+    if hasattr(subprocess, 'check_output'):
+        mailbox_path = subprocess.check_output(
+                ["/usr/lib/cyrus-imapd/mbpath", folder_path]
+            ).strip()
+    else:
+        # Do it the old-fashioned way
+        p1 = subprocess.Popen(
+                ["/usr/lib/cyrus-imapd/mbpath", folder_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+
+        (stdout, stderr) = p1.communicate()
+        mailbox_path = stdout.strip()
+
+    # TODO: Assumption #4 is we use altnamespace
+    if not folder_name == "INBOX":
+        if not len(folder_name.split('@')) > 0:
+            mailbox_path = os.path.join(mailbox_path, folder_name)
+
+    return mailbox_path
     

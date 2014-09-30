@@ -1,31 +1,23 @@
 import os
 import json
-
+import bonnie
 from bonnie.collector import BonnieCollector
+from bonnie.collector.handlers import MessageDataHandler, IMAPDataHandler
 from twisted.trial import unittest
 
 
 class TestBonnieCollector(unittest.TestCase):
 
     def setUp(self):
-        pass
+        # patch bonnie.utils.imap_mailbox_fs_path() to point to local resources folder
+        self.patch(bonnie.utils, 'imap_mailbox_fs_path', self._imap_mailbox_fs_path)
 
-    def _patch_imap_folder_path(self):
-        # patch BonnieCollector.get_imap_folder_path() to point to local resources folder
-        self.patch(BonnieCollector, "get_imap_folder_path", self._get_imap_folder_path)
-
-    def _get_imap_folder_path(self, uri):
+    def _imap_mailbox_fs_path(self, uri):
         pwd = os.path.dirname(__file__)
         return os.path.join(pwd, 'resources')
 
-    def test_get_imap_folder_path(self):
-        coll = BonnieCollector()
-        path = coll.get_imap_folder_path("imap://john.doe@example.org@kolab.example.org/Calendar/Personal%20Calendar;UID=3")
-        self.assertEqual(path, "/var/spool/imap/domain/e/example.org/j/user/john^doe/Calendar/Personal Calendar")
-
     def test_retrieve_headers_for_messages(self):
-        self._patch_imap_folder_path()
-        coll = BonnieCollector()
+        coll = MessageDataHandler()
         notification = { 'uri': 'imap://john.doe@example.org@kolab.example.org/Calendar', 'uidset': '3' }
         notification = json.loads(coll.retrieve_headers_for_messages(json.dumps(notification)))
 
@@ -39,8 +31,7 @@ class TestBonnieCollector(unittest.TestCase):
         self.assertEqual(headers['From'][0], 'John Doe <john.doe@example.org>')
 
     def test_retrieve_contents_for_messages(self):
-        self._patch_imap_folder_path()
-        coll = BonnieCollector()
+        coll = MessageDataHandler()
         notification = { 'uri': 'imap://john.doe@example.org@kolab.example.org/Calendar', 'uidset': '3' }
         notification = json.loads(coll.retrieve_contents_for_messages(json.dumps(notification)))
 
@@ -54,8 +45,16 @@ class TestBonnieCollector(unittest.TestCase):
         self.assertTrue(notification['messageHeaders'].has_key('3'))
         self.assertIsInstance(notification['messageHeaders']['3'], dict)
 
-    def test_execute(self):
-        self._patch_imap_folder_path()
+    def test_get_imap_folder_metadata(self):
+        coll = IMAPDataHandler()
+        notification = { 'uri': 'imap://john.doe@example.org@kolab.example.org/Calendar' }
+        notification = json.loads(coll.get_imap_folder_metadata(json.dumps(notification)))
+
+        self.assertTrue(notification.has_key('metadata'))
+        self.assertIsInstance(notification['metadata'], dict)
+        self.assertEqual(notification['metadata']['/shared/vendor/kolab/folder-type'], 'event')
+
+    def test_zz_execute(self):
         coll = BonnieCollector()
 
         notification = { 'uri': 'imap://john.doe@example.org@kolab.example.org/Calendar;UID=3' }
@@ -68,3 +67,6 @@ class TestBonnieCollector(unittest.TestCase):
         notification['vnd.cmu.oldUidset'] = '3'
         result = json.loads(coll.execute('HEADER', json.dumps(notification)))
         self.assertTrue(result.has_key('messageHeaders'))
+
+        result = json.loads(coll.execute('GETMETADATA', json.dumps(notification)))
+        self.assertTrue(result.has_key('metadata'))

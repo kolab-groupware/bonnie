@@ -28,3 +28,16 @@ class MailboxCreateHandler(HandlerBase):
 
     def __init__(self, *args, **kw):
         HandlerBase.__init__(self, *args, **kw)
+        self.log = bonnie.getLogger('worker.' + self.event)
+
+    def run(self, notification):
+        # message notifications require message headers
+        if not notification.has_key('metadata'):
+            self.log.debug("Adding GETMETADATA job for " + self.event, level=8)
+            return (notification, [ b"GETMETADATA" ])
+
+        # extract uniqueid from metadata
+        if notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
+            notification['uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+
+        return (notification, [])

@@ -33,9 +33,9 @@ class MessageHandlerBase(HandlerBase):
 
     def run(self, notification):
         # message notifications require message headers
-        if notification.has_key('messageHeaders'):
-            return (notification, [])
+        if not notification.has_key('messageHeaders'):
+            self.log.debug("Adding HEADER job for " + self.event, level=8)
+            return (notification, [ b"HEADER" ])
 
-        self.log.debug("Adding HEADER job for " + self.event, level=8)
-        jobs = [ b"HEADER" ]
-        return (notification, jobs)
+        return (notification, [])
+
