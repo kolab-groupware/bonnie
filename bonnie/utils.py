@@ -165,7 +165,7 @@ def imap_folder_path(uri):
     # TODO: Shared Folders.
     if not username == None:
         if folder_name == "INBOX":
-            folder_path = os.path.join('user', '/%s@%s' % (username, domain))
+            folder_path = os.path.join('user', '%s@%s' % (username, domain))
         else:
             folder_path = os.path.join('user', username, '%s@%s' % (folder_name, domain))
     else:
