@@ -43,6 +43,8 @@ class ElasticSearchOutput(object):
             'messageHeaders': None,
             'messageContent': None,
             'bodyStructure':  None,
+            'metadata':       None,
+            'acl':            None,
             'flagNames':    'flag_names',
             'diskUsed':     'disk_used',
             'vnd.cmu.oldUidset': 'olduidset',

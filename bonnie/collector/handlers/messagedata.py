@@ -146,6 +146,10 @@ class MessageDataHandler(object):
 
                 messageHeaders[message_uid] = headers
 
+            else:
+                log.warning("Failed to open message file %r for uri=%s; uid=%s" % (message_file_path, notification, message_uid))
+                # TODO: fall back to vnd.cmu.envelope property
+
         notification['messageHeaders'] = messageHeaders
 
         return json.dumps(notification)

@@ -105,6 +105,15 @@ class BonnieWorker(object):
             (notification, _jobs) = interest['callback'](notification=notification)
             jobs.extend(_jobs)
 
+        # trigger storage modules which registered interest in particular notification properties
+        if len(jobs) == 0:
+            for prop,storage_interests in self.storage_interests.iteritems():
+                if notification.has_key(prop):
+                    for interest in storage_interests:
+                        (notification, _jobs) = interest['callback'](notification=notification)
+                        jobs.extend(_jobs)
+
+        # finally send notification to output handlers if no jobs remaining
         if len(jobs) == 0:
             for interest in self.output_interests['_all']:
                 (notification, _jobs) = interest['callback'](notification=notification)
@@ -142,7 +151,11 @@ class BonnieWorker(object):
             self.output_interests[interest].append(how)
 
     def register_storage(self, interests):
-        self.storage_interests = interests
+        for interest,how in interests.iteritems():
+            if not self.storage_interests.has_key(interest):
+                self.storage_interests[interest] = []
+
+            self.storage_interests[interest].append(how)
 
     def run(self):
         input_modules = conf.get('worker', 'input_modules')
