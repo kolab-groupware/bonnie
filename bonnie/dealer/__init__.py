@@ -20,10 +20,12 @@
 # USA.
 #
 
+import json
 import outputs
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('dealer')
 
 class BonnieDealer(object):
     output_modules = {}
@@ -36,8 +38,25 @@ class BonnieDealer(object):
     def register_output(self, interests):
         self.output_interests = interests
 
+    def accept_notification(self, notification):
+        parsed = json.loads(notification)
+        event = parsed['event']
+        user = parsed['user'] if parsed.has_key('user') else None
+
+        blacklist_events = conf.get('dealer', 'blacklist_events').split(',')
+        blacklist_users  = conf.get('dealer', 'blacklist_users').split(',')
+
+        # ignore blacklisted events for blacklisted users
+        if event in blacklist_events and user is not None and user in blacklist_users:
+            return False
+
+        return True
+
     def run(self, notification):
-        output_modules = conf.get('dealer', 'output_modules')
-        for _output in self.output_modules.keys():
-            if _output.name() == output_modules:
-                _output.run(notification)
+        if self.accept_notification(notification):
+            output_modules = conf.get('dealer', 'output_modules')
+            for _output in self.output_modules.keys():
+                if _output.name() == output_modules:
+                    _output.run(notification)
+        else:
+            log.info("Ignoring notification %s", notification)

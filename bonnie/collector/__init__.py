@@ -20,7 +20,6 @@
 # USA.
 #
 
-import json
 import os
 import inputs
 import handlers
