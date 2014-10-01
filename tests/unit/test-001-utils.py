@@ -43,8 +43,8 @@ class TestBonnieUtils(unittest.TestCase):
         self.assertEqual(len(headers['From']), 1)
         self.assertEqual(len(headers['To']), 2)
         self.assertEqual(headers['To'][0], u'Br\u00fcderli, Thomas <thomas.bruederli@example.org>')
-        self.assertEqual(headers['@Content-Type'], 'text/plain')
-        self.assertEqual(headers['@Date'], '2014-09-24T04:52:00Z')
+        self.assertEqual(headers['Content-Type'], 'text/plain')
+        self.assertEqual(headers['Date'], '2014-09-24T04:52:00Z')
         self.assertEqual(headers['Subject'], 'Test')
 
     def test_mail_message2dict(self):

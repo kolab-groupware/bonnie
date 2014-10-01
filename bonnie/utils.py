@@ -85,14 +85,14 @@ def decode_message_headers(message):
         else:
             headers[k] = _decode_mime_header(value)
 
-    # add some normalized header values good for searching
-    headers['@Content-Type'] = message.get_content_type()
+    # replace content-type with the normalized value (good for searching)
+    headers['Content-Type'] = message.get_content_type()
 
     # convert Date into UTC
     if headers.has_key('Date'):
         try:
             date = parse_date(headers['Date']).astimezone(tzutc())
-            headers['@Date'] = datetime.datetime.strftime(date, "%Y-%m-%dT%H:%M:%SZ")
+            headers['Date'] = datetime.datetime.strftime(date, "%Y-%m-%dT%H:%M:%SZ")
         except:
             pass
 
