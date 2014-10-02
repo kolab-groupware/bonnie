@@ -58,7 +58,7 @@ class ElasticSearchStorage(object):
         if callback is not None:
             callback(interests={
                 'uidset': { 'callback': self.resolve_folder_uri },
-                'uniqueid': { 'callback': self.resolve_folder_uri },
+                'folder_uniqueid': { 'callback': self.resolve_folder_uri },
                 'mailboxID': { 'callback': self.resolve_folder_uri, 'kw': { 'attrib': 'mailboxID' } }
             })
 
@@ -75,13 +75,13 @@ class ElasticSearchStorage(object):
         if not notification.has_key('metadata'):
             return False
 
-        if not notification.has_key('uniqueid') and notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
-            notification['uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+        if not notification.has_key('folder_uniqueid') and notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
+            notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
 
         body = {
             '@version': bonnie.API_VERSION,
             '@timestamp': datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'uniqueid': notification['uniqueid'],
+            'uniqueid': notification['folder_uniqueid'],
             'metadata': notification['metadata'],
             'acl': notification['acl'],
             'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
@@ -95,8 +95,9 @@ class ElasticSearchStorage(object):
         ignore_metadata = ['/shared/vendor/cmu/cyrus-imapd/lastupdate', '/shared/vendor/cmu/cyrus-imapd/pop3newuidl', '/shared/vendor/cmu/cyrus-imapd/size']
         signature = {
             '@version': bonnie.API_VERSION,
-            'uri': folder_uri,
-            'uniqueid': notification['uniqueid'],
+            'owner': body['owner'],
+            'server': body['server'],
+            'uniqueid': notification['folder_uniqueid'],
             'metadata': [(k,v) for k,v in sorted(notification['metadata'].iteritems()) if k not in ignore_metadata],
             'acl': [(k,v) for k,v in sorted(notification['acl'].iteritems())],
         }
@@ -108,7 +109,7 @@ class ElasticSearchStorage(object):
 
     def resolve_folder_uri(self, notification, attrib='uri'):
         """
-            Resolve the folder uri (or uniqueid) into an elasticsearch object ID
+            Resolve the folder uri (or folder_uniqueid) into an elasticsearch object ID
         """
         # no folder resolving required
         if not notification.has_key(attrib) or notification.has_key('folder_id'):
@@ -139,7 +140,7 @@ class ElasticSearchStorage(object):
                 index=self.folders_index,
                 doc_type=self.folders_doctype,
                 id=folder['id'],
-                fields='uniqueid'
+                fields='uniqueid,name'
             )
             self.log.debug("ES search result for folder: %r" % (existing), level=8)
 
@@ -170,9 +171,30 @@ class ElasticSearchStorage(object):
                 self.log.warning("ES create exception: %r", e)
                 folder = None
 
-        # replace uniqueid with the internal folder_id
+        # update entry if name changed
+        elif folder['body']['uniqueid'] in existing['fields']['uniqueid'] and \
+            not folder['body']['name'] in existing['fields']['name']:
+            try:
+                ret = self.es.update(
+                    index=self.folders_index,
+                    doc_type=self.folders_doctype,
+                    id=folder['id'],
+                    body={ 'doc': {
+                            'name': folder['body']['name'],
+                            'uri': folder['body']['uri']
+                        }
+                    },
+                    consistency='one',
+                    replication='async'
+                )
+                self.log.debug("Updated folder object: %r" % (ret), level=8)
+
+            except Exception, e:
+                self.log.warning("ES update exception: %r", e)
+
+
+        # add reference to internal folder_id
         if folder is not None:
             notification['folder_id'] = folder['id']
-            notification.pop('uniqueid', None)
 
         return (notification, [])

@@ -37,8 +37,8 @@ class MailboxCreateHandler(HandlerBase):
             self.log.debug("Adding GETMETADATA job for " + self.event, level=8)
             return (notification, [ b"GETMETADATA" ])
 
-        # extract uniqueid from metadata
+        # extract uniqueid from metadata -> triggers the storage module
         if notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
-            notification['uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+            notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
 
         return (notification, [])

@@ -127,7 +127,6 @@ class BonnieWorker(object):
         """
         kw = interest['kw'] if interest.has_key('kw') else {}
         kw['notification'] = notification
-        print 'interest_callback', interest
         return interest['callback'](**kw)
 
     def register_handler(self, interests={}):

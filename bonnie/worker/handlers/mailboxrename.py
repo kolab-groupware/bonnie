@@ -28,3 +28,14 @@ class MailboxRenameHandler(HandlerBase):
 
     def __init__(self, *args, **kw):
         HandlerBase.__init__(self, *args, **kw)
+
+    def run(self, notification):
+        # mailbox notifications require metadata
+        if not notification.has_key('metadata'):
+            return (notification, [ b"GETMETADATA" ])
+
+        # extract uniqueid from metadata -> triggers the storage module
+        if notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
+            notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+
+        return (notification, [])

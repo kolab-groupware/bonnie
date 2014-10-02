@@ -52,7 +52,7 @@ class TestBonnieWorker(unittest.TestCase):
         folder_id = folder['id']
 
         self.assertTrue(folder.has_key('body'))
-        self.assertEqual(folder['body']['uniqueid'], notification['uniqueid'])
+        self.assertEqual(folder['body']['uniqueid'], notification['folder_uniqueid'])
         self.assertEqual(folder['body']['server'], 'kolab.example.org')
         self.assertEqual(folder['body']['owner'], 'john.doe@example.org')
         self.assertEqual(folder['body']['uri'], 'imap://john.doe@example.org@kolab.example.org/Calendar/Subcal')
@@ -64,6 +64,7 @@ class TestBonnieWorker(unittest.TestCase):
             'anyone': 'lrs',
             'john.doe@example.org': "lrswipkxtecdan",
         }
+        notification['uri'] = 'imap://john.doe@example.org@kolab.example.org/Calendar/RENAMED;UIDVALIDITY=123456'
         folder = storage.notificaton2folder(notification)
         self.assertEqual(folder['id'], folder_id)
 
