@@ -29,6 +29,7 @@ from messagetrash import MessageTrashHandler
 from quotaexceeded import QuotaExceededHandler
 from quotawithin import QuotaWithinHandler
 from quotachange import QuotaChangeHandler
+from changelog import ChangelogHandler
 
 __all__ = [
         'AclChangeHandler',
@@ -78,5 +79,6 @@ def list_classes():
             MessageTrashHandler,
             QuotaExceededHandler,
             QuotaWithinHandler,
-            QuotaChangeHandler
+            QuotaChangeHandler,
+            ChangelogHandler
         ]

@@ -9,7 +9,7 @@ class HandlerBase(object):
                     }
             }
 
-        callback(interests)
+        self.worker = callback(interests)
 
     def run(self, notification):
         return (notification, [])

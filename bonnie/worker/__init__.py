@@ -73,13 +73,18 @@ class BonnieWorker(object):
             __class = _class()
             self.input_modules[__class] = __class.register(callback=self.register_input)
 
+        output_modules = conf.get('worker', 'output_modules')
         for _class in outputs.list_classes():
-            __class = _class()
-            self.output_modules[__class] = __class.register(callback=self.register_output)
+            _output = _class()
+            if _output.name() == output_modules:
+                self.output_modules[_output] = _output.register(callback=self.register_output)
 
+        storage_modules = conf.get('worker', 'storage_modules')
         for _class in storage.list_classes():
-            __class = _class()
-            self.storage_modules[__class] = __class.register(callback=self.register_storage)
+            _storage = _class()
+            if _storage.name() == storage_modules:
+                self.storage_modules[_storage] = _storage.register(callback=self.register_storage)
+                self.storage = _storage
 
     def event_notification(self, notification):
         """
@@ -114,10 +119,16 @@ class BonnieWorker(object):
                         jobs.extend(_jobs)
 
         # finally send notification to output handlers if no jobs remaining
-        if len(jobs) == 0:
-            for interest in self.output_interests['_all']:
-                (notification, _jobs) = self.interest_callback(interest, notification)
-                jobs.extend(_jobs)
+        if len(jobs) == 0 and not notification.has_key('_suppress_output'):
+            if self.output_interests.has_key(event):
+                for interest in self.output_interests[event]:
+                    (notification, _jobs) = self.interest_callback(interest, notification)
+                    jobs.extend(_jobs)
+
+            if not notification.has_key('_suppress_output') and self.output_interests.has_key('_all'):
+                for interest in self.output_interests['_all']:
+                    (notification, _jobs) = self.interest_callback(interest, notification)
+                    jobs.extend(_jobs)
 
         return notification, jobs
 
@@ -141,15 +152,18 @@ class BonnieWorker(object):
 
                 { 'MessageAppend': { 'callback': self.run } }
         """
-
+        print 'register_handler', interests
         for interest,how in interests.iteritems():
             if not self.handler_interests.has_key(interest):
                 self.handler_interests[interest] = []
 
             self.handler_interests[interest].append(how)
 
+        return self
+
     def register_input(self, interests):
         self.input_interests = interests
+        return self
 
     def register_output(self, interests):
         for interest,how in interests.iteritems():
@@ -158,12 +172,16 @@ class BonnieWorker(object):
 
             self.output_interests[interest].append(how)
 
+        return self
+
     def register_storage(self, interests):
         for interest,how in interests.iteritems():
             if not self.storage_interests.has_key(interest):
                 self.storage_interests[interest] = []
 
             self.storage_interests[interest].append(how)
+
+        return self
 
     def run(self):
         input_modules = conf.get('worker', 'input_modules')

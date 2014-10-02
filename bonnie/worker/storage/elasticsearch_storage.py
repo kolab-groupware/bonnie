@@ -25,6 +25,7 @@
 """
 
 import json
+import urllib
 import hashlib
 import datetime
 import elasticsearch
@@ -36,6 +37,8 @@ import bonnie
 conf = bonnie.getConf()
 
 class ElasticSearchStorage(object):
+    default_index = 'objects'
+    default_doctype = 'object'
     folders_index = 'objects'
     folders_doctype = 'folder'
 
@@ -56,11 +59,98 @@ class ElasticSearchStorage(object):
 
     def register(self, callback, **kw):
         if callback is not None:
-            callback(interests={
+            self.worker = callback(interests={
                 'uidset': { 'callback': self.resolve_folder_uri },
                 'folder_uniqueid': { 'callback': self.resolve_folder_uri },
                 'mailboxID': { 'callback': self.resolve_folder_uri, 'kw': { 'attrib': 'mailboxID' } }
             })
+
+    def get(self, key, index=None, doctype=None, fields=None, **kw):
+        """
+            Standard API for accessing key/value storage
+        """
+        try:
+            result = self.es.get(
+                index=index or self.default_index,
+                doc_type=doctype or self.default_doctype,
+                id=key,
+                _source_include=fields or '*'
+            )
+            self.log.debug("ES get result for key %s: %r" % (key, result), level=8)
+
+        except elasticsearch.exceptions.NotFoundError, e:
+            self.log.debug("ES entry not found for key %s: %r", key, e)
+            result = None
+
+        except Exception, e:
+            self.log.warning("ES get exception: %r", e)
+            result = None
+
+        return None
+
+
+    def set(self, key, value, index=None, doctype=None, **kw):
+        """
+            Standard API for writing to key/value storage
+        """
+        _index = index or self.default_index
+        _doctype = doctype or self.default_doctype
+        try:
+            existing = self.es.get(
+                index=_index,
+                doc_type=_doctype,
+                id=key,
+                fields=None
+            )
+            self.log.debug("ES get result for key %s: %r" % (key, existing), level=8)
+
+        except elasticsearch.exceptions.NotFoundError, e:
+            existing = None
+
+        except Exception, e:
+            self.log.warning("ES get exception: %r", e)
+            existing = None
+
+        if existing is None:
+            try:
+                ret = self.es.create(
+                    index=_index,
+                    doc_type=_doctype,
+                    id=key,
+                    body=value,
+                    consistency='one',
+                    replication='async'
+                )
+                self.log.debug("Created ES object for key %s: %r" % (key, ret), level=8)
+
+            except Exception, e:
+                self.log.warning("ES create exception: %r", e)
+                ret = None
+        else:
+            try:
+                ret = self.es.update(
+                    index=_index,
+                    doc_type=_doctype,
+                    id=key,
+                    body={ 'doc': value },
+                    consistency='one',
+                    replication='async'
+                )
+                self.log.debug("Updated ES objectfor key %s: %r" % (key, ret), level=8)
+
+            except Exception, e:
+                self.log.warning("ES update exception: %r", e)
+
+        return ret
+
+
+    def select(self, query, index=None, doctype=None, **kw):
+        """
+            Standard API for querying storage
+        """
+        # TODO: implement this
+        return None
+
 
     def notificaton2folder(self, notification, attrib='uri'):
         """
@@ -70,7 +160,12 @@ class ElasticSearchStorage(object):
         """
         # split the uri parameter into useful parts
         uri = parse_imap_uri(notification[attrib])
-        folder_uri = "imap://%(user)s@%(domain)s@%(host)s/%(path)s" % uri
+
+        # re-compose folder uri
+        templ = "imap://%(user)s@%(domain)s@%(host)s/"
+        if uri['user'] is None:
+            templ = "imap://%(host)s/"
+        folder_uri = templ % uri + urllib.quote(uri['path'])
 
         if not notification.has_key('metadata'):
             return False
@@ -85,7 +180,7 @@ class ElasticSearchStorage(object):
             'metadata': notification['metadata'],
             'acl': notification['acl'],
             'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
-            'owner': uri['user'] + '@' + uri['domain'],
+            'owner': uri['user'] + '@' + uri['domain'] if uri['user'] is not None else 'nobody',
             'server': uri['host'],
             'name': uri['path'],
             'uri': folder_uri,
@@ -135,40 +230,24 @@ class ElasticSearchStorage(object):
             return (notification, [])
 
         # lookup existing entry
-        try:
-            existing = self.es.get(
-                index=self.folders_index,
-                doc_type=self.folders_doctype,
-                id=folder['id'],
-                fields='uniqueid,name'
-            )
-            self.log.debug("ES search result for folder: %r" % (existing), level=8)
-
-        except elasticsearch.exceptions.NotFoundError, e:
-            self.log.debug("Folder entry not found in ES: %r", e)
-            existing = None
-
-        except Exception, e:
-            self.log.warning("ES get exception: %r", e)
-            existing = None
+        existing = self.get(
+            index=self.folders_index,
+            doc_type=self.folders_doctype,
+            key=folder['id'],
+            fields='uniqueid,name'
+        )
 
         # create an entry for the referenced imap folder
         if existing is None:
             self.log.debug("Create folder object for: %r" % (folder['body']['uri']), level=8)
 
-            try:
-                ret = self.es.create(
-                    index=self.folders_index,
-                    doc_type=self.folders_doctype,
-                    id=folder['id'],
-                    body=folder['body'],
-                    consistency='one',
-                    replication='async'
-                )
-                self.log.debug("Created folder object: %r" % (ret), level=8)
-
-            except Exception, e:
-                self.log.warning("ES create exception: %r", e)
+            ret = self.set(
+                index=self.folders_index,
+                doc_type=self.folders_doctype,
+                key=folder['id'],
+                value=folder['body']
+            )
+            if ret is None:
                 folder = None
 
         # update entry if name changed
