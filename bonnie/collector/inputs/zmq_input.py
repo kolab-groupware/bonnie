@@ -61,15 +61,16 @@ class ZMQInput(object):
     def register(self, *args, **kw):
         pass
 
-    def report_state(self):
-        log.debug("[%s] Reporting state %s" % (self.identity, self.state), level=9)
-        self.collector.send_multipart([b"STATE", self.state])
+    def report_state(self, interests=[]):
+        log.debug("[%s] Reporting state %s, %r" % (self.identity, self.state, interests), level=9)
+        self.collector.send_multipart([b"STATE", self.state, ",".join(interests)])
         self.report_timestamp = time.time()
 
-    def run(self, callback=None):
+    def run(self, callback=None, interests=[]):
         log.info("[%s] starting", self.identity)
 
-        self.report_state()
+        # report READY state with interests
+        self.report_state(interests)
 
         while True:
             sockets = dict(self.poller.poll(1000))

@@ -43,15 +43,21 @@ class ZMQBroker(object):
         self.collect_jobs = []
         self.collectors = {}
         self.workers = {}
+        self.collector_interests = []
 
     def register(self, callback):
         callback({ '_all': self.run })
 
-    def collector_add(self, _collector_id, _state):
-        log.debug("Adding collector %s" % (_collector_id), level=5)
+    def collector_add(self, _collector_id, _state, _interests):
+        log.debug("Adding collector %s for %r" % (_collector_id, _interests), level=5)
 
-        collector = Collector(_collector_id, _state)
+        collector = Collector(_collector_id, _state, _interests)
         self.collectors[_collector_id] = collector
+
+        # regisrer the reported interests
+        if len(_interests) > 0:
+            _interests.extend(self.collector_interests)
+            self.collector_interests = list(set(_interests))
 
     def collect_job_allocate(self, _collector_id):
         jobs = [x for x in self.collect_jobs if x.collector_id == _collector_id and x.state == b"PENDING"]
@@ -66,9 +72,9 @@ class ZMQBroker(object):
     def collect_jobs_with_status(self, _state, collector_id=None):
         return [x for x in self.collect_jobs if x.state == _state and x.collector_id == collector_id]
 
-    def collector_set_status(self, _collector_id, _state):
+    def collector_set_status(self, _collector_id, _state, _interests):
         if not self.collectors.has_key(_collector_id):
-            self.collector_add(_collector_id, _state)
+            self.collector_add(_collector_id, _state, _interests)
         else:
             self.collectors[_collector_id].set_status(_state)
 
@@ -230,7 +236,7 @@ class ZMQBroker(object):
                     if _message[1] == b"DONE":
                         self.worker_job_done(_message[2])
 
-                    if _message[1] in [b"FETCH", b"HEADER", b"GETMETADATA", b"GETACL"]:
+                    if _message[1] in self.collector_interests:
                         _job_uuid = _message[2]
                         self.transit_job_collect(_job_uuid, _message[1])
 
@@ -254,7 +260,8 @@ class ZMQBroker(object):
                     if _message[1] == b"STATE":
                         _collector_id = _message[0]
                         _state = _message[2]
-                        self.collector_set_status(_collector_id, _state)
+                        _interests = _message[3]
+                        self.collector_set_status(_collector_id, _state, _interests.split(","))
 
                     if _message[1] == b"DONE":
                         _collector_id = _message[0]

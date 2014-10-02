@@ -39,10 +39,12 @@ class BonnieCollector(object):
 
 
     def __init__(self, *args, **kw):
+        # TODO: read active input module from config collector.input_modules
         for _class in inputs.list_classes():
             __class = _class()
             self.input_modules[__class] = __class.register(callback=self.register_input)
 
+        # TODO: read active handler module from config collector.handler_modules
         for _class in handlers.list_classes():
             __class = _class()
             self.handler_modules[__class] = __class.register(callback=self.register_handler)
@@ -73,5 +75,5 @@ class BonnieCollector(object):
         input_modules = conf.get('collector', 'input_modules')
         for _input in self.input_modules.keys():
             if _input.name() == input_modules:
-                _input.run(callback=self.execute)
+                _input.run(callback=self.execute, interests=self.handler_interests.keys())
 
