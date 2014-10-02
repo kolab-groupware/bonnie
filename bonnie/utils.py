@@ -150,6 +150,9 @@ def imap_folder_path(uri):
     domain = uri['domain']
     folder_name = uri['path']
 
+    # FIXME: prefix for shared folders; should be read from IMAP NAMESPACE command
+    shared_prefix = conf.get('imap', 'sharedprefix')
+
     # Through filesystem
     # To get the mailbox path, use:
     # TODO: Assumption #1 is we are using virtual domains, and this domain does
@@ -159,17 +162,19 @@ def imap_folder_path(uri):
     # Translate the folder name in to a fully qualified folder path such as it
     # would be used by a cyrus administrator.
     #
-    # TODO: Other Users (covered, the netloc has the username the suffix is the
+    # Other Users (covered, the netloc has the username the suffix is the
     # original folder name).
-    #
-    # TODO: Shared Folders.
     if not username == None:
         if folder_name == "INBOX":
             folder_path = os.path.join('user', '%s@%s' % (username, domain))
         else:
             folder_path = os.path.join('user', username, '%s@%s' % (folder_name, domain))
+    # Shared Folders
     else:
-        folder_path = folder_name
+        if folder_name.startswith(shared_prefix):
+            folder_path = folder_name[len(shared_prefix):]
+        else:
+            folder_path = folder_name
 
     return folder_path
 

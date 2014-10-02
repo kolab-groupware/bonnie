@@ -69,9 +69,9 @@ class TestBonnieUtils(unittest.TestCase):
         p2 = imap_folder_path("imap://john.doe@example.org@kolab.example.org/INBOX;UIDVALIDITY=1411487702")
         self.assertEqual(p2, "user/john.doe@example.org")
 
-        # TODO: test shared folders (but how are they referred in the uri?)
-        #p3 = imap_folder_path("imap://john.doe@example.org@kolab.example.org/shared/Project-X;UID=3")
-        #self.assertEqual(p3, "shared/Project-X@example.org")
+        # test shared folders (but how are they referred in the uri?)
+        p3 = imap_folder_path("imap://kolab33.example.org/Shared%20Folders/shared/Project-X%40example.org;UIDVALIDITY=1412093781/;UID=2")
+        self.assertEqual(p3, "shared/Project-X@example.org")
 
     def test_imap_mailbox_fs_path(self):
         path = imap_mailbox_fs_path("imap://john.doe@example.org@kolab.example.org/Calendar/Personal%20Calendar;UID=3")
