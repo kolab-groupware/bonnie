@@ -25,6 +25,7 @@
 """
 
 import json
+import hashlib
 import datetime
 import elasticsearch
 
@@ -57,82 +58,117 @@ class ElasticSearchStorage(object):
                 'uniqueid': { 'callback': self.resolve_folder_uri }
             })
 
+    def notificaton2folder(self, notification):
+        """
+            Turn the given notification record into a folder document.
+            including the computation of a unique identifier which is a checksum
+            of the (relevant) folder properties.
+        """
+        # split the uri parameter into useful parts
+        uri = parse_imap_uri(notification['uri'])
+        folder_uri = "imap://%(user)s@%(domain)s@%(host)s/%(path)s" % uri
+
+        if not notification.has_key('metadata'):
+            return False
+
+        if not notification.has_key('uniqueid') and notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
+            notification['uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+
+        body = {
+            '@version': bonnie.API_VERSION,
+            '@timestamp': datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'uniqueid': notification['uniqueid'],
+            'metadata': notification['metadata'],
+            'acl': notification['acl'],
+            'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
+            'owner': uri['user'] + '@' + uri['domain'],
+            'server': uri['host'],
+            'name': uri['path'],
+            'uri': folder_uri,
+        }
+
+        # compute folder object signature and the unique identifier
+        ignore_metadata = ['/shared/vendor/cmu/cyrus-imapd/lastupdate', '/shared/vendor/cmu/cyrus-imapd/pop3newuidl', '/shared/vendor/cmu/cyrus-imapd/size']
+        signature = {
+            '@version': bonnie.API_VERSION,
+            'uri': folder_uri,
+            'uniqueid': notification['uniqueid'],
+            'metadata': [(k,v) for k,v in sorted(notification['metadata'].iteritems()) if k not in ignore_metadata],
+            'acl': [(k,v) for k,v in sorted(notification['acl'].iteritems())],
+        }
+        serialized = ";".join("%s:%s" % (k,v) for k,v in sorted(signature.iteritems()))
+        folder_id = hashlib.md5(serialized).hexdigest()
+
+        return dict(id=folder_id, body=body)
+
+
     def resolve_folder_uri(self, notification):
         """
             Resolve the folder uri (or uniqueid) into an elasticsearch object ID
         """
         # no folder resolving required
-        if not notification.has_key('uri'):
+        if not notification.has_key('uri') or notification.has_key('folder_id'):
             (notification, [])
 
-        # split the uri parameter into useful parts
-        uri = parse_imap_uri(notification['uri'])
+        self.log.debug("Resolve folder uri %r" % (notification['uri']), level=8)
 
-        self.log.debug("Resolve folder uri %r: %r" % (notification['uri'], uri), level=8)
-
-        # mailbox resolving requires 'uniqueid' coming from metadata
-        if not notification.has_key('uniqueid') and not notification.has_key('metadata'):
+        # mailbox resolving requires metadata
+        if not notification.has_key('metadata'):
             self.log.debug("Adding GETMETADATA job", level=8)
             return (notification, [ b"GETMETADATA" ])
 
-        if not notification.has_key('uniqueid') and notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
-            notification['uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+        # before creating a folder entry, we should collect folder ACLs
+        if not notification.has_key('acl'):
+            self.log.debug("Adding GETACL", level=8)
+            return (notification, [ b"GETACL" ])
+
+        # extract folder properties and a unique identifier from the notification
+        folder = self.notificaton2folder(notification)
+
+        # abort if notificaton2folder() failed
+        if folder is False:
+            return (notification, [])
 
         # lookup existing entry
-        if notification.has_key('uniqueid'):
+        try:
+            existing = self.es.get(
+                index=self.folders_index,
+                doc_type=self.folders_doctype,
+                id=folder['id'],
+                fields='uniqueid'
+            )
+            self.log.debug("ES search result for folder: %r" % (existing), level=8)
+
+        except elasticsearch.exceptions.NotFoundError, e:
+            self.log.debug("Folder entry not found in ES: %r", e)
+            existing = None
+
+        except Exception, e:
+            self.log.warning("ES get exception: %r", e)
+            existing = None
+
+        # create an entry for the referenced imap folder
+        if existing is None:
+            self.log.debug("Create folder object for: %r" % (folder['body']['uri']), level=8)
+
             try:
-                result = self.es.search(
+                ret = self.es.create(
                     index=self.folders_index,
                     doc_type=self.folders_doctype,
-                    q='uniqueid:"%s"' % (notification['uniqueid']),
-                    search_type='query_then_fetch'
+                    id=folder['id'],
+                    body=folder['body'],
+                    consistency='one',
+                    replication='async'
                 )
-                self.log.debug("ES search result for folder: %r" % (result), level=8)
+                self.log.debug("Created folder object: %r" % (ret), level=8)
 
             except Exception, e:
-                self.log.warning("ES search exception: %r", e)
-                result = None
+                self.log.warning("ES create exception: %r", e)
+                folder = None
 
-            # replace uniqueid with the internal folder_id after successful lookup
-            # TODO: check if the folder was updated recently (ACL changes?, /shared/vendor/cmu/cyrus-imapd/lastupdate?)
-            #       and insert a new folder record
-            if result is not None and len(result['hits']['hits']) > 0:
-                hit = result['hits']['hits'][0]
-                notification['folder_id'] = hit['_id']
-                notification.pop('uniqueid', None)
-
-
-            # create an entry for the referenced imap folder
-            if not notification.has_key('folder_id'):
-                # before creating a folder entry, we should collect folder ACLs
-                if not notification.has_key('acl'):
-                    self.log.debug("Adding GETACL", level=8)
-                    return (notification, [ b"GETACL" ])
-
-                self.log.debug("Create folder object for: %r" % (notification['uniqueid']), level=8)
-
-                try:
-                    ret = self.es.create(
-                        index=self.folders_index,
-                        doc_type=self.folders_doctype,
-                        body={
-                            '@version': bonnie.API_VERSION,
-                            'uniqueid': notification['uniqueid'],
-                            'metadata': notification['metadata'],
-                            'acl': notification['acl'],
-                            'owner': uri['user'] + '@' + uri['domain'],
-                            'server': uri['host'],
-                            'name': uri['path'],
-                            'uri': "imap://%(user)s@%(domain)s@%(host)s/%(path)s" % uri,
-                        }
-                    )
-                    self.log.debug("Created folder object: %r" % (ret), level=8)
-
-                    # replace uniqueid with the internal folder_id
-                    notification['folder_id'] = ret['_id']
-                    notification.pop('uniqueid', None)
-
-                except Exception, e:
-                    self.log.warning("ES create exception: %r", e)
+        # replace uniqueid with the internal folder_id
+        if folder is not None:
+            notification['folder_id'] = folder['id']
+            notification.pop('uniqueid', None)
 
         return (notification, [])
