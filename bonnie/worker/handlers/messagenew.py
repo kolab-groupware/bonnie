@@ -21,10 +21,10 @@
     Base handler for an event notification of type 'MessageNew'
 """
 
-from bonnie.worker.handlers import MessageHandlerBase
+from bonnie.worker.handlers import MessageAppendHandler
 
-class MessageNewHandler(MessageHandlerBase):
+class MessageNewHandler(MessageAppendHandler):
     event = 'MessageNew'
 
     def __init__(self, *args, **kw):
-        MessageHandlerBase.__init__(self, *args, **kw)
+        MessageAppendHandler.__init__(self, *args, **kw)

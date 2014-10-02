@@ -17,8 +17,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-import json
 import os
+import time
+import json
 
 from email import message_from_string
 
@@ -45,53 +46,10 @@ class MessageDataHandler(object):
         callback(interests)
 
     def retrieve_contents_for_messages(self, notification):
-        messageContents = {}
-        messageHeaders = {}
-
         notification = json.loads(notification)
         log.debug("FETCH for %r" % (notification), level=9)
 
-        # split the uri parameter into useful parts
-        uri = parse_imap_uri(notification['uri'])
-
-        if notification.has_key('uidset'):
-            message_uids = expand_uidset(notification['uidset'])
-        elif notification.has_key('vnd.cmu.oldUidset'):
-            message_uids = expand_uidset(notification['vnd.cmu.oldUidset'])
-        elif uri.has_key('UID'):
-            message_uids = [ uri['UID'] ]
-            notification['uidset'] = ','.join(message_uids)
-
-        # resolve uri into a mailbox path on the local file stystem
-        mailbox_path = utils.imap_mailbox_fs_path(uri)
-        log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
-
-        # using message file path /var/spool/imap/domain/e/example.org/k/lists/kolab^org/devel/lists/kolab.org/devel@example.org/1.
-        for message_uid in message_uids:
-            message_file_path = "%s/%s." % (mailbox_path, message_uid)
-
-            log.debug("Open message file: %r" % (message_file_path), level=8)
-
-            if os.access(message_file_path, os.R_OK):
-                fp = open(message_file_path, 'r')
-                data = fp.read()
-                fp.close()
-
-                # use email lib to parse message headers
-                try:
-                    # find header delimiter
-                    pos = data.find("\r\n\r\n")
-                    message = message_from_string(data[0:pos])
-                    headers = decode_message_headers(message)
-                except:
-                    headers = dict()
-
-                # append raw message data and parsed headers
-                messageContents[message_uid] = data
-                messageHeaders[message_uid] = headers
-
-            else:
-                log.warning("Failed to open message file %r for uri=%s; uid=%s" % (message_file_path, notification, message_uid))
+        (messageContents, messageHeaders) = self._retrieve_contents_for_messages(notification)
 
         # set new notification properties, even if empty
         notification['messageContent'] = messageContents
@@ -100,10 +58,22 @@ class MessageDataHandler(object):
         return json.dumps(notification)
 
     def retrieve_headers_for_messages(self, notification):
-        messageHeaders = {}
-
         notification = json.loads(notification)
         log.debug("HEADERS for %r" % (notification), level=9)
+
+        (messageContents, messageHeaders) = self._retrieve_contents_for_messages(notification, True)
+
+        # set new notification properties, even if empty
+        notification['messageHeaders'] = messageHeaders
+
+        return json.dumps(notification)
+
+    def _retrieve_contents_for_messages(self, notification, headers_only=False):
+        """
+            Helper method to deliver message contents/headers
+        """
+        messageContents = {}
+        messageHeaders = {}
 
         # split the uri parameter into useful parts
         uri = parse_imap_uri(notification['uri'])
@@ -118,38 +88,64 @@ class MessageDataHandler(object):
 
         # resolve uri into a mailbox path on the local file stystem
         mailbox_path = utils.imap_mailbox_fs_path(uri)
+
         log.debug("Using mailbox path: %r" % (mailbox_path), level=8)
 
-        for message_uid in message_uids:
-            message_file_path = "%s/%s." % (mailbox_path, message_uid)
+        # mailbox exists, try reading the message files
+        if os.path.exists(mailbox_path):
+            for message_uid in message_uids:
+                # using message file path like /var/spool/imap/domain/e/example.org/k/lists/kolab^org/devel/lists/kolab.org/devel@example.org/1.
+                message_file_path = "%s/%s." % (mailbox_path, message_uid)
 
-            log.debug("Open message file: %r" % (message_file_path), level=8)
+                log.debug("Open message file: %r" % (message_file_path), level=8)
 
-            # read file line by line until we reach an empty line
-            if os.access(message_file_path, os.R_OK):
-                data = ''
-                fp = open(message_file_path, 'r')
-                for line in fp:
-                    data += line
-                    if line.strip() == '':
-                        break;
+                attempts = 5
+                while attempts > 0:
+                    attempts -= 1
 
-                fp.close()
+                    if os.access(message_file_path, os.R_OK):
+                        fp = open(message_file_path, 'r')
 
-                # use email lib to parse message headers
-                try:
-                    message = message_from_string(data)
-                    headers = decode_message_headers(message)
-                except Exception, e:
-                    log.warning("Failed to parse MIME message headers: %r", e)
-                    headers = data
+                        if headers_only:
+                            data = ''
+                            for line in fp:
+                                data += line
+                                if line.strip() == '':
+                                    break;
+                            data += "\r\n"
+                        else:
+                            data = fp.read()
 
-                messageHeaders[message_uid] = headers
+                        fp.close()
 
-            else:
-                log.warning("Failed to open message file %r for uri=%s; uid=%s" % (message_file_path, notification, message_uid))
-                # TODO: fall back to vnd.cmu.envelope property
+                        # use email lib to parse message headers
+                        try:
+                            # find header delimiter
+                            pos = data.find("\r\n\r\n")
+                            message = message_from_string(data[0:pos])
+                            headers = decode_message_headers(message)
+                        except:
+                            headers = dict()
+                            messageHeaders[message_uid] = headers
 
-        notification['messageHeaders'] = messageHeaders
+                        # append raw message data and parsed headers
+                        messageContents[message_uid] = data
+                        messageHeaders[message_uid] = headers
+                        break
 
-        return json.dumps(notification)
+                    elif attempts > 0:
+                        log.debug("Failed to open message file %r; retry %d more times" % (
+                            message_file_path, attempts
+                        ), level=5)
+                    else:
+                        log.warning("Failed to open message file %r for uri=%s; uid=%s" % (
+                            message_file_path, notification, message_uid
+                        ))
+
+                    time.sleep(1)
+                # end while
+            # end for
+        else:
+            log.warning("Mailbox path %r does not exits for uri=%s" % (mailbox_path, notification['uri']))
+
+        return (messageContents, messageHeaders)
