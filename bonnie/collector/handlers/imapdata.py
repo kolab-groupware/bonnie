@@ -26,7 +26,7 @@ from bonnie.utils import parse_imap_uri
 from bonnie.utils import imap_folder_path
 
 conf = bonnie.getConf()
-log = bonnie.getLogger('collector.IMAPDataHandler')
+log = bonnie.getLogger('bonnie.collector.IMAPDataHandler')
 
 class IMAPDataHandler(object):
     """

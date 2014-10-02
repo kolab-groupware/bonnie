@@ -29,7 +29,7 @@ from bonnie.utils import parse_imap_uri
 from bonnie.utils import decode_message_headers
 
 conf = bonnie.getConf()
-log = bonnie.getLogger('collector.MessageDataHandler')
+log = bonnie.getLogger('bonnie.collector.MessageDataHandler')
 
 class MessageDataHandler(object):
 

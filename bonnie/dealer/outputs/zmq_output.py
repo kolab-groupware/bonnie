@@ -26,7 +26,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
-log = bonnie.getLogger('dealer.ZMQOutput')
+log = bonnie.getLogger('bonnie.dealer.ZMQOutput')
 
 class ZMQOutput(object):
     def __init__(self, *args, **kw):

@@ -29,7 +29,7 @@ class MailboxCreateHandler(HandlerBase):
 
     def __init__(self, *args, **kw):
         HandlerBase.__init__(self, *args, **kw)
-        self.log = bonnie.getLogger('worker.' + self.event)
+        self.log = bonnie.getLogger('bonnie.worker.' + self.event)
 
     def run(self, notification):
         # mailbox notifications require metadata

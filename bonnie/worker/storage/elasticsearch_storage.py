@@ -40,7 +40,7 @@ class ElasticSearchStorage(object):
     folders_doctype = 'folder'
 
     def __init__(self, *args, **kw):
-        self.log = bonnie.getLogger('worker.ElasticSearchStorage')
+        self.log = bonnie.getLogger('bonnie.worker.ElasticSearchStorage')
 
         elasticsearch_output_address = conf.get('worker', 'elasticsearch_storage_address')
 
@@ -51,21 +51,25 @@ class ElasticSearchStorage(object):
             host=elasticsearch_output_address
         )
 
+    def name(self):
+        return 'elasticsearch_storage'
+
     def register(self, callback, **kw):
         if callback is not None:
             callback(interests={
                 'uidset': { 'callback': self.resolve_folder_uri },
-                'uniqueid': { 'callback': self.resolve_folder_uri }
+                'uniqueid': { 'callback': self.resolve_folder_uri },
+                'mailboxID': { 'callback': self.resolve_folder_uri, 'kw': { 'attrib': 'mailboxID' } }
             })
 
-    def notificaton2folder(self, notification):
+    def notificaton2folder(self, notification, attrib='uri'):
         """
             Turn the given notification record into a folder document.
             including the computation of a unique identifier which is a checksum
             of the (relevant) folder properties.
         """
         # split the uri parameter into useful parts
-        uri = parse_imap_uri(notification['uri'])
+        uri = parse_imap_uri(notification[attrib])
         folder_uri = "imap://%(user)s@%(domain)s@%(host)s/%(path)s" % uri
 
         if not notification.has_key('metadata'):
@@ -102,15 +106,15 @@ class ElasticSearchStorage(object):
         return dict(id=folder_id, body=body)
 
 
-    def resolve_folder_uri(self, notification):
+    def resolve_folder_uri(self, notification, attrib='uri'):
         """
             Resolve the folder uri (or uniqueid) into an elasticsearch object ID
         """
         # no folder resolving required
-        if not notification.has_key('uri') or notification.has_key('folder_id'):
-            (notification, [])
+        if not notification.has_key(attrib) or notification.has_key('folder_id'):
+            return (notification, [])
 
-        self.log.debug("Resolve folder uri %r" % (notification['uri']), level=8)
+        self.log.debug("Resolve folder for %r = %r" % (attrib, notification[attrib]), level=8)
 
         # mailbox resolving requires metadata
         if not notification.has_key('metadata'):

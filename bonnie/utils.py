@@ -13,7 +13,7 @@ from email.utils import getaddresses
 
 import bonnie
 conf = bonnie.getConf()
-log = bonnie.getLogger('utils')
+log = bonnie.getLogger('bonnie.utils')
 
 
 def expand_uidset(uidset):

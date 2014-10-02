@@ -28,7 +28,7 @@ import bonnie
 from bonnie.utils import parse_imap_uri
 
 conf = bonnie.getConf()
-log = bonnie.getLogger('collector')
+log = bonnie.getLogger('bonnie.collector')
 
 class BonnieCollector(object):
     input_interests = {}

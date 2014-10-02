@@ -25,7 +25,7 @@ import outputs
 
 import bonnie
 conf = bonnie.getConf()
-log = bonnie.getLogger('dealer')
+log = bonnie.getLogger('bonnie.dealer')
 
 class BonnieDealer(object):
     output_modules = {}

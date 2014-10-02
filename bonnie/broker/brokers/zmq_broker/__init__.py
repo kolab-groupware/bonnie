@@ -31,7 +31,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
-log = bonnie.getLogger('broker.ZMQBroker')
+log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 
 from job import Job
 from collector import Collector

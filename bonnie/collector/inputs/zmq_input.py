@@ -34,7 +34,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
-log = bonnie.getLogger('collector.ZMQInput')
+log = bonnie.getLogger('bonnie.collector.ZMQInput')
 
 class ZMQInput(object):
     state = b"READY"

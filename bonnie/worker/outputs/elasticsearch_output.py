@@ -23,6 +23,9 @@ class ElasticSearchOutput(object):
                 host=elasticsearch_output_address
             )
 
+    def name(self):
+        return 'elasticsearch_output'
+
     def register(self, callback):
         callback({'_all': { 'callback': self.run }})
 

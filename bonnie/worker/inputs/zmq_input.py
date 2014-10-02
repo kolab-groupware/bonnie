@@ -33,7 +33,7 @@ import zmq
 
 import bonnie
 conf = bonnie.getConf()
-log = bonnie.getLogger('worker.ZMQInput')
+log = bonnie.getLogger('bonnie.worker.ZMQInput')
 
 class ZMQInput(object):
     def __init__(self, *args, **kw):
