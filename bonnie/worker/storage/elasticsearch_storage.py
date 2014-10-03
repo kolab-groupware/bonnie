@@ -159,6 +159,18 @@ class ElasticSearchStorage(object):
         return None
 
 
+    def resolve_username(self, user):
+        """
+            Resovle the given username to the corresponding nsuniqueid from LDAP
+        """
+        if not '@' in user:
+            return user
+
+        # TODO: resolve with storage data
+        # return md5 sum of the username to make usernames work as fields/keys in elasticsearch
+        return hashlib.md5(user).hexdigest()
+
+
     def notificaton2folder(self, notification, attrib='uri'):
         """
             Turn the given notification record into a folder document.
@@ -185,7 +197,7 @@ class ElasticSearchStorage(object):
             '@timestamp': datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'uniqueid': notification['folder_uniqueid'],
             'metadata': notification['metadata'],
-            'acl': notification['acl'],
+            'acl': dict((self.resolve_username(k),v) for k,v in notification['acl'].iteritems()),
             'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
             'owner': uri['user'] + '@' + uri['domain'] if uri['user'] is not None else 'nobody',
             'server': uri['host'],
@@ -200,8 +212,8 @@ class ElasticSearchStorage(object):
             'owner': body['owner'],
             'server': body['server'],
             'uniqueid': notification['folder_uniqueid'],
-            'metadata': [(k,v) for k,v in sorted(notification['metadata'].iteritems()) if k not in ignore_metadata],
-            'acl': [(k,v) for k,v in sorted(notification['acl'].iteritems())],
+            'metadata': [(k,v) for k,v in sorted(body['metadata'].iteritems()) if k not in ignore_metadata],
+            'acl': [(k,v) for k,v in sorted(body['acl'].iteritems())],
         }
         serialized = ";".join("%s:%s" % (k,v) for k,v in sorted(signature.iteritems()))
         folder_id = hashlib.md5(serialized).hexdigest()
