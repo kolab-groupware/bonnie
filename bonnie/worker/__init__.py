@@ -130,7 +130,7 @@ class BonnieWorker(object):
                     (notification, _jobs) = self.interest_callback(interest, notification)
                     jobs.extend(_jobs)
 
-        return notification, jobs
+        return notification, list(set(jobs))
 
     def interest_callback(self, interest, notification):
         """
