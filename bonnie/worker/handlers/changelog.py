@@ -59,7 +59,7 @@ class ChangelogHandler(HandlerBase):
 
         # assign a revision number based on the current time
         if object_type is not None:
-            notification['revision'] = str(int(round(time.time() * 100 - REVBASE)))
+            notification['revision'] = int(round(time.time() * 100 - REVBASE))
             # TODO: save object type and UUID in separate fields?
             # These are translated into headers.X-Kolab-Type and headers.Subject by the output module
 

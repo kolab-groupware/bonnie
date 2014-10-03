@@ -68,14 +68,16 @@ class ElasticSearchStorage(object):
         """
             Standard API for accessing key/value storage
         """
+        _index = index or self.default_index
+        _doctype = doctype or self.default_doctype
         try:
             res = self.es.get(
-                index=index or self.default_index,
-                doc_type=doctype or self.default_doctype,
+                index=_index,
+                doc_type=_doctype,
                 id=key,
                 _source_include=fields or '*'
             )
-            log.debug("ES get result for key %s: %r" % (key, res), level=8)
+            log.debug("ES get result for %s/%s/%s: %r" % (_index, _doctype, key, res), level=8)
 
             if res['found']:
                 result = res['_source']
@@ -86,7 +88,7 @@ class ElasticSearchStorage(object):
                 result = None
 
         except elasticsearch.exceptions.NotFoundError, e:
-            log.debug("ES entry not found for key %s: %r", key, e)
+            log.debug("ES entry not found for %s/%s/%s: %r" % (_index, _doctype, key, e))
             result = None
 
         except Exception, e:
@@ -109,7 +111,7 @@ class ElasticSearchStorage(object):
                 id=key,
                 fields=None
             )
-            log.debug("ES get result for key %s: %r" % (key, existing), level=8)
+            log.debug("ES get result for %s/%s/%s: %r" % (_index, _doctype, key, existing), level=8)
 
         except elasticsearch.exceptions.NotFoundError, e:
             existing = None
@@ -128,7 +130,7 @@ class ElasticSearchStorage(object):
                     consistency='one',
                     replication='async'
                 )
-                log.debug("Created ES object for key %s: %r" % (key, ret), level=8)
+                log.debug("Created ES object for %s/%s/%s: %r" % (_index, _doctype, key, ret), level=8)
 
             except Exception, e:
                 log.warning("ES create exception: %r", e)
@@ -143,7 +145,7 @@ class ElasticSearchStorage(object):
                     consistency='one',
                     replication='async'
                 )
-                log.debug("Updated ES object for key %s: %r" % (key, ret), level=8)
+                log.debug("Updated ES object for %s/%s/%s: %r" % (_index, _doctype, key, ret), level=8)
 
             except Exception, e:
                 log.warning("ES update exception: %r", e)
