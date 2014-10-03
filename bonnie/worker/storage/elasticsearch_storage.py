@@ -70,13 +70,21 @@ class ElasticSearchStorage(object):
             Standard API for accessing key/value storage
         """
         try:
-            result = self.es.get(
+            res = self.es.get(
                 index=index or self.default_index,
                 doc_type=doctype or self.default_doctype,
                 id=key,
                 _source_include=fields or '*'
             )
             self.log.debug("ES get result for key %s: %r" % (key, result), level=8)
+
+            if res['found']:
+                result = res['_source']
+                result['_id'] = res['_id']
+                result['_index'] = res['_index']
+                result['_doctype'] = res['_type']
+            else:
+                result = None
 
         except elasticsearch.exceptions.NotFoundError, e:
             self.log.debug("ES entry not found for key %s: %r", key, e)
@@ -86,7 +94,7 @@ class ElasticSearchStorage(object):
             self.log.warning("ES get exception: %r", e)
             result = None
 
-        return None
+        return result
 
 
     def set(self, key, value, index=None, doctype=None, **kw):
@@ -232,7 +240,7 @@ class ElasticSearchStorage(object):
         # lookup existing entry
         existing = self.get(
             index=self.folders_index,
-            doc_type=self.folders_doctype,
+            doctype=self.folders_doctype,
             key=folder['id'],
             fields='uniqueid,name'
         )
@@ -243,7 +251,7 @@ class ElasticSearchStorage(object):
 
             ret = self.set(
                 index=self.folders_index,
-                doc_type=self.folders_doctype,
+                doctype=self.folders_doctype,
                 key=folder['id'],
                 value=folder['body']
             )
@@ -251,8 +259,8 @@ class ElasticSearchStorage(object):
                 folder = None
 
         # update entry if name changed
-        elif folder['body']['uniqueid'] in existing['fields']['uniqueid'] and \
-            not folder['body']['name'] in existing['fields']['name']:
+        elif folder['body']['uniqueid'] == existing['uniqueid'] and \
+            not folder['body']['name'] == existing['name']:
             try:
                 ret = self.es.update(
                     index=self.folders_index,
