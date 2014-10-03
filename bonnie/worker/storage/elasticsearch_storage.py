@@ -35,6 +35,7 @@ from bonnie.utils import parse_imap_uri
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie.worker.ElasticSearchStorage')
 
 class ElasticSearchStorage(object):
     default_index = 'objects'
@@ -43,8 +44,6 @@ class ElasticSearchStorage(object):
     folders_doctype = 'folder'
 
     def __init__(self, *args, **kw):
-        self.log = bonnie.getLogger('bonnie.worker.ElasticSearchStorage')
-
         elasticsearch_output_address = conf.get('worker', 'elasticsearch_storage_address')
 
         if elasticsearch_output_address == None:
@@ -76,7 +75,7 @@ class ElasticSearchStorage(object):
                 id=key,
                 _source_include=fields or '*'
             )
-            self.log.debug("ES get result for key %s: %r" % (key, result), level=8)
+            log.debug("ES get result for key %s: %r" % (key, res), level=8)
 
             if res['found']:
                 result = res['_source']
@@ -87,11 +86,11 @@ class ElasticSearchStorage(object):
                 result = None
 
         except elasticsearch.exceptions.NotFoundError, e:
-            self.log.debug("ES entry not found for key %s: %r", key, e)
+            log.debug("ES entry not found for key %s: %r", key, e)
             result = None
 
         except Exception, e:
-            self.log.warning("ES get exception: %r", e)
+            log.warning("ES get exception: %r", e)
             result = None
 
         return result
@@ -110,13 +109,13 @@ class ElasticSearchStorage(object):
                 id=key,
                 fields=None
             )
-            self.log.debug("ES get result for key %s: %r" % (key, existing), level=8)
+            log.debug("ES get result for key %s: %r" % (key, existing), level=8)
 
         except elasticsearch.exceptions.NotFoundError, e:
             existing = None
 
         except Exception, e:
-            self.log.warning("ES get exception: %r", e)
+            log.warning("ES get exception: %r", e)
             existing = None
 
         if existing is None:
@@ -129,10 +128,10 @@ class ElasticSearchStorage(object):
                     consistency='one',
                     replication='async'
                 )
-                self.log.debug("Created ES object for key %s: %r" % (key, ret), level=8)
+                log.debug("Created ES object for key %s: %r" % (key, ret), level=8)
 
             except Exception, e:
-                self.log.warning("ES create exception: %r", e)
+                log.warning("ES create exception: %r", e)
                 ret = None
         else:
             try:
@@ -144,10 +143,10 @@ class ElasticSearchStorage(object):
                     consistency='one',
                     replication='async'
                 )
-                self.log.debug("Updated ES objectfor key %s: %r" % (key, ret), level=8)
+                log.debug("Updated ES object for key %s: %r" % (key, ret), level=8)
 
             except Exception, e:
-                self.log.warning("ES update exception: %r", e)
+                log.warning("ES update exception: %r", e)
 
         return ret
 
@@ -218,16 +217,16 @@ class ElasticSearchStorage(object):
         if not notification.has_key(attrib) or notification.has_key('folder_id'):
             return (notification, [])
 
-        self.log.debug("Resolve folder for %r = %r" % (attrib, notification[attrib]), level=8)
+        log.debug("Resolve folder for %r = %r" % (attrib, notification[attrib]), level=8)
 
         # mailbox resolving requires metadata
         if not notification.has_key('metadata'):
-            self.log.debug("Adding GETMETADATA job", level=8)
+            log.debug("Adding GETMETADATA job", level=8)
             return (notification, [ b"GETMETADATA" ])
 
         # before creating a folder entry, we should collect folder ACLs
         if not notification.has_key('acl'):
-            self.log.debug("Adding GETACL", level=8)
+            log.debug("Adding GETACL", level=8)
             return (notification, [ b"GETACL" ])
 
         # extract folder properties and a unique identifier from the notification
@@ -247,7 +246,7 @@ class ElasticSearchStorage(object):
 
         # create an entry for the referenced imap folder
         if existing is None:
-            self.log.debug("Create folder object for: %r" % (folder['body']['uri']), level=8)
+            log.debug("Create folder object for: %r" % (folder['body']['uri']), level=8)
 
             ret = self.set(
                 index=self.folders_index,
@@ -274,10 +273,10 @@ class ElasticSearchStorage(object):
                     consistency='one',
                     replication='async'
                 )
-                self.log.debug("Updated folder object: %r" % (ret), level=8)
+                log.debug("Updated folder object: %r" % (ret), level=8)
 
             except Exception, e:
-                self.log.warning("ES update exception: %r", e)
+                log.warning("ES update exception: %r", e)
 
 
         # add reference to internal folder_id
