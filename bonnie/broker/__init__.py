@@ -6,8 +6,9 @@ class BonnieBroker(object):
 
     def __init__(self, *args, **kw):
         for _class in brokers.list_classes():
-            __class = _class()
-            self.broker_modules[__class] = __class.register(callback=self.register_broker)
+            module = _class()
+            module.register(callback=self.register_broker)
+            self.broker_modules[_class] = module
 
     def register_broker(self, interests):
         """
@@ -24,3 +25,10 @@ class BonnieBroker(object):
         for interest, hows in self.broker_interests.iteritems():
             for how in hows:
                 how()
+
+    def terminate(self, *args, **kw):
+        for module in self.broker_modules.values():
+            if hasattr(module, 'terminate'):
+                module.terminate()
+            else:
+                module.running = False

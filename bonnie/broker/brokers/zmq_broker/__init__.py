@@ -38,6 +38,8 @@ from collector import Collector
 from worker import Worker
 
 class ZMQBroker(object):
+    running = False
+
     def __init__(self):
         self.worker_jobs = []
         self.collect_jobs = []
@@ -88,7 +90,6 @@ class ZMQBroker(object):
         job = Job(
                 notification=_notification,
                 state=b"PENDING",
-                worker=None,
                 client_id=client_id,
                 collector_id=collector_id,
             )
@@ -113,7 +114,7 @@ class ZMQBroker(object):
         job = jobs.pop()
 
         job.set_state(b"ALLOC")
-        job.set_worker(self.workers[_worker_id])
+        job.set_worker(_worker_id)
 
         return job.uuid
 
@@ -138,7 +139,7 @@ class ZMQBroker(object):
         return [x for x in self.worker_jobs if x.state == _state]
 
     def worker_jobs_with_worker(self, _worker_id):
-        return [x for x in self.worker_jobs if x.worker == self.workers[_worker_id]]
+        return [x for x in self.worker_jobs if x.worker_id == _worker_id]
 
     def worker_add(self, _worker_id, _state):
         log.debug("Adding worker %s (%s)" % (_worker_id, _state), level=5)
@@ -178,6 +179,7 @@ class ZMQBroker(object):
 
     def run(self):
         log.info("Starting")
+        self.running = True
 
         context = zmq.Context()
 
@@ -219,8 +221,13 @@ class ZMQBroker(object):
         poller.register(self.worker_router, zmq.POLLIN)
         poller.register(self.controller, zmq.POLLIN)
 
-        while True:
-            sockets = dict(poller.poll(1000))
+        while self.running:
+            try:
+                sockets = dict(poller.poll(1000))
+            except Exception, e:
+                log.error("zmq.Poller error: %r", e)
+                sockets = dict()
+
             self.workers_expire()
 
             if self.controller in sockets:
@@ -298,6 +305,7 @@ class ZMQBroker(object):
                     self.collector_router.send_multipart([job.collector_id, job.command, job.uuid, job.notification])
 
 
+        log.info("Shutting down")
         dealer_router.close()
         self.controller.close()
         self.collector_router.close()

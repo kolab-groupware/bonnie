@@ -38,6 +38,7 @@ log = bonnie.getLogger('bonnie.collector.ZMQInput')
 
 class ZMQInput(object):
     state = b"READY"
+    running = False
 
     def __init__(self, *args, **kw):
         self.context = zmq.Context()
@@ -69,11 +70,17 @@ class ZMQInput(object):
     def run(self, callback=None, interests=[]):
         log.info("[%s] starting", self.identity)
 
+        self.running = True
+
         # report READY state with interests
         self.report_state(interests)
 
-        while True:
-            sockets = dict(self.poller.poll(1000))
+        while self.running:
+            try:
+                sockets = dict(self.poller.poll(1000))
+            except Exception, e:
+                log.error("zmq.Poller error: %r", e)
+                sockets = dict()
 
             if self.report_timestamp < (time.time() - 60):
                 self.report_state()
@@ -98,4 +105,5 @@ class ZMQInput(object):
 
                             self.collector.send_multipart([b"DONE", _job_uuid, result])
 
+        log.info("[%s] shutting down", self.identity)
         self.collector.close()

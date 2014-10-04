@@ -67,23 +67,27 @@ class BonnieWorker(object):
 
         for _class in handlers.list_classes():
             __class = _class()
-            self.handler_modules[__class] = __class.register(callback=self.register_handler)
+            __class.register(callback=self.register_handler)
+            self.handler_modules[_class] = __class
 
         for _class in inputs.list_classes():
             __class = _class()
-            self.input_modules[__class] = __class.register(callback=self.register_input)
+            __class.register(callback=self.register_input)
+            self.input_modules[_class] = __class
 
-        output_modules = conf.get('worker', 'output_modules')
+        output_modules = conf.get('worker', 'output_modules').split(',')
         for _class in outputs.list_classes():
             _output = _class()
-            if _output.name() == output_modules:
-                self.output_modules[_output] = _output.register(callback=self.register_output)
+            if _output.name() in output_modules:
+                _output.register(callback=self.register_output)
+                self.output_modules[_class] = _output
 
-        storage_modules = conf.get('worker', 'storage_modules')
+        storage_modules = conf.get('worker', 'storage_modules').split(',')
         for _class in storage.list_classes():
             _storage = _class()
-            if _storage.name() == storage_modules:
-                self.storage_modules[_storage] = _storage.register(callback=self.register_storage)
+            if _storage.name() in storage_modules:
+                _storage.register(callback=self.register_storage)
+                self.storage_modules[_class] = _storage
                 self.storage = _storage
 
     def event_notification(self, notification):
@@ -184,8 +188,14 @@ class BonnieWorker(object):
         return self
 
     def run(self):
-        input_modules = conf.get('worker', 'input_modules')
-        for _input in self.input_modules.keys():
-            if _input.name() == input_modules:
+        input_modules = conf.get('worker', 'input_modules').split(',')
+        for _input in self.input_modules.values():
+            if _input.name() in input_modules:
                 _input.run(callback=self.event_notification)
 
+    def terminate(self, *args, **kw):
+        for _input in self.input_modules.values():
+            if hasattr(_input, 'terminate'):
+                _input.terminate()
+            else:
+                _input.running = False

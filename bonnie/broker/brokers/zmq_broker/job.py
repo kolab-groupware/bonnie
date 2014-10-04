@@ -23,18 +23,20 @@ import hashlib
 import time
 
 class Job(object):
+    uuid = None
     state = None
-    worker_id = None
     timestamp = None
     notification = None
+    worker_id = None
     client_id = None
+    collector_id = None
+    command = None
 
-    def __init__(self, state=None, worker=None, notification=None, client_id=None, collector_id=None):
-        self.uuid = hashlib.sha224(notification).hexdigest()
+    def __init__(self, state=None, notification=None, worker_id=None, client_id=None, collector_id=None):
         self.uuid = "%s.%s" % (hashlib.sha224(notification).hexdigest(), time.time())
         self.state = state
-        self.worker = worker
         self.notification = notification
+        self.worker_id = worker_id
         self.client_id = client_id
         self.collector_id = collector_id
         self.timestamp = time.time()
@@ -51,8 +53,8 @@ class Job(object):
     def set_state(self, state):
         self.state = state
 
-    def set_worker(self, worker):
-        self.worker = worker
+    def set_worker(self, worker_id):
+        self.worker_id = worker_id
 
     def set_command(self, cmd):
         self.command = cmd
