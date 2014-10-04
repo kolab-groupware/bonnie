@@ -20,10 +20,7 @@
 # USA.
 #
 
-"""
-    Storage node writing object data into Elasticsearch
-"""
-
+import re
 import json
 import urllib
 import hashlib
@@ -38,6 +35,9 @@ conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.worker.ElasticSearchStorage')
 
 class ElasticSearchStorage(object):
+    """
+        Storage node writing object data into Elasticsearch
+    """
     default_index = 'objects'
     default_doctype = 'object'
     folders_index = 'objects'
@@ -203,7 +203,7 @@ class ElasticSearchStorage(object):
             'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
             'owner': uri['user'] + '@' + uri['domain'] if uri['user'] is not None else 'nobody',
             'server': uri['host'],
-            'name': uri['path'],
+            'name': re.sub('@.+$', '', uri['path']),
             'uri': folder_uri,
         }
 
