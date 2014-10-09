@@ -1,0 +1,94 @@
+import os
+import json
+import bonnie
+from bonnie.broker import persistence
+from bonnie.broker.persistence import db, PersistentBase
+from bonnie.broker.brokers.zmq_broker.job import Job
+from twisted.trial import unittest
+
+class PlistItem(PersistentBase):
+    __tablename__ = 'plisttest'
+    id = db.Column(db.Integer, primary_key=True)
+    value = db.Column(db.String)
+
+    def __init__(self, value, id=None):
+        self.value = value
+        self.id = id
+
+    def __repr__(self):
+        return '<PlistItem %s:%r>' % (self.id, self.value)
+
+
+class TestBonniePersistence(unittest.TestCase):
+
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        # TODO: clear database
+        # PersistentBase.metadata.drop_all(bonnie.broker.persistence.engine)
+        pass
+
+    def test_001_base_list(self):
+        plist = persistence.List('base', PlistItem)
+        plist.append(PlistItem("One"))
+        plist.append(PlistItem("Two"))
+        item3 = PlistItem("Three")
+        plist.append(item3)
+
+        self.assertEqual(len(plist), 3)
+        self.assertEqual(plist[2], item3)
+        self.assertEqual(2, plist.index(item3))
+        self.assertTrue(item3 in plist)
+
+        plist.append(PlistItem("Five"))
+        plist.append(PlistItem("Six"))
+
+        plist[4] = PlistItem("Five.5")
+        self.assertEqual(plist[4].value, "Five.5")
+
+        del plist[plist.index(item3)]
+        plist.pop(3)
+        plist.pop()
+        self.assertEqual(len(plist), 2)
+
+        i = 0
+        for item in plist:
+            i += 1
+            self.assertTrue(isinstance(item, PlistItem))
+
+        self.assertEqual(i, 2)
+
+
+    def test_003_broker_jobs(self):
+        worker_jobs = persistence.List('worker', Job)
+        collector_jobs = persistence.List('collector', Job)
+        one = Job(state='PENDING', notification='{"state":"pending","event":"test"}', collector_id='C.1')
+        two = Job(state='PENDING', notification='{"state":"pending","event":"other"}', collector_id='C.1')
+        done = Job(state='DONE', notification='{"state":"done","event":"passed"}', collector_id='C.1')
+        worker_jobs.append(one)
+        worker_jobs.append(two)
+        worker_jobs.append(done)
+
+        self.assertEqual(len(worker_jobs), 3)
+        self.assertEqual(len(collector_jobs), 0)
+        self.assertTrue(one.uuid in [x.uuid for x in worker_jobs])
+        pending = [x for x in worker_jobs if x.state == 'PENDING' and x.collector_id == 'C.1']
+        self.assertEqual(len(pending), 2)
+        job = pending.pop()
+
+        self.assertEqual(job, two)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(len(worker_jobs), 3)
+
+        # move job to another list
+        collector_jobs.append(one)
+        self.assertTrue(one in collector_jobs)
+        self.assertTrue(one in worker_jobs)
+
+        worker_jobs.remove(one)
+        self.assertFalse(one in worker_jobs)
+
+        self.assertEqual(len(worker_jobs), 2)
+        self.assertEqual(len(collector_jobs), 1)
+        

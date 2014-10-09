@@ -20,7 +20,7 @@
 #
 
 """
-    This is the broker for Bonnie.
+    This is the ZMQ broker implementation for Bonnie.
 """
 
 import copy
@@ -36,13 +36,14 @@ log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 from job import Job
 from collector import Collector
 from worker import Worker
+from bonnie.broker import persistence
 
 class ZMQBroker(object):
     running = False
 
     def __init__(self):
-        self.worker_jobs = []
-        self.collect_jobs = []
+        self.worker_jobs = persistence.List('worker_jobs', Job)
+        self.collect_jobs = persistence.List('collect_jobs', Job)
         self.collectors = {}
         self.workers = {}
         self.collector_interests = []
@@ -120,7 +121,7 @@ class ZMQBroker(object):
 
     def worker_job_done(self, _job_uuid):
         for job in [x for x in self.worker_jobs if x.uuid == _job_uuid]:
-            del self.worker_jobs[self.worker_jobs.index(job)]
+            self.worker_jobs.delete(job)
         log.debug("Worker job done: %s;" % (_job_uuid), level=8)
 
     def worker_job_free(self, _job_uuid):
@@ -221,6 +222,16 @@ class ZMQBroker(object):
         poller.register(self.worker_router, zmq.POLLIN)
         poller.register(self.controller, zmq.POLLIN)
 
+        # reset existing jobs in self.worker_jobs and self.collect_jobs to status PENDING (?)
+        # this will re-assign them to workers and collectors after a broker restart
+        for job in self.worker_jobs:
+            job.set_state(b"PENDING")
+
+        for job in self.collect_jobs:
+            job.set_state(b"PENDING")
+
+        persistence.syncronize()
+
         while self.running:
             try:
                 sockets = dict(poller.poll(1000))
@@ -304,8 +315,13 @@ class ZMQBroker(object):
                     job = self.collect_job_allocate(collector)
                     self.collector_router.send_multipart([job.collector_id, job.command, job.uuid, job.notification])
 
+            # synchronize job lists to persistent storage
+            persistence.syncronize()
+
 
         log.info("Shutting down")
+
+        persistence.syncronize()
         dealer_router.close()
         self.controller.close()
         self.collector_router.close()
@@ -317,12 +333,12 @@ class ZMQBroker(object):
             job.set_state(b"PENDING")
             job.set_command(_command)
             self.collect_jobs.append(job)
-            del self.worker_jobs[self.worker_jobs.index(job)]
+            self.worker_jobs.remove(job)
 
     def transit_job_worker(self, _job_uuid, _notification):
         for job in [x for x in self.collect_jobs if x.uuid == _job_uuid]:
             job.set_state(b"PENDING")
             job.notification = _notification
             self.worker_jobs.append(job)
-            del self.collect_jobs[self.collect_jobs.index(job)]
+            self.collect_jobs.remove(job)
 
