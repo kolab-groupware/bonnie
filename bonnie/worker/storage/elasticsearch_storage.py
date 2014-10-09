@@ -80,10 +80,7 @@ class ElasticSearchStorage(object):
             log.debug("ES get result for %s/%s/%s: %r" % (_index, _doctype, key, res), level=8)
 
             if res['found']:
-                result = res['_source']
-                result['_id'] = res['_id']
-                result['_index'] = res['_index']
-                result['_doctype'] = res['_type']
+                result = self._transform_result(res)
             else:
                 result = None
 
@@ -153,13 +150,100 @@ class ElasticSearchStorage(object):
         return ret
 
 
-    def select(self, query, index=None, doctype=None, **kw):
+
+    def select(self, query, index=None, doctype=None, fields=None, sortby=None, limit=None, **kw):
         """
             Standard API for querying storage
-        """
-        # TODO: implement this
-        return None
 
+            @param query:   List of query parameters, each represented as a triplet of (<field> <op> <value>).
+                            combined to an AND list of search criterias. <value> can either be
+                             - a string for direct comparison
+                             - a list for "in" comparisons
+                             - a tuple with two values for range queries
+            @param index:   Index name (i.e. database name)
+            @param doctype: Document type (i.e. table name)
+            @param fields:  List of fields to retrieve (string, comma-separated)
+            @param sortby:  Fields to be used fort sorting the results (string, comma-separated)
+            @param limit:   Number of records to return
+        """
+        result = None
+        args = dict(index=index or self.default_index, doc_type=doctype or self.default_doctype, _source_include=fields or '*')
+
+        if isinstance(query, dict):
+            args['body'] = query
+        elif isinstance(query, list):
+            args['q'] = self._build_query(query)
+        else:
+            args['q'] = query
+
+        if sortby is not None:
+            args['sort'] = sortby
+        if limit is not None:
+            args['size'] = int(limit)
+
+        try:
+            res = self.es.search(**args)
+            log.debug("ES select result for %r: %r" % (args['q'] or args['body'], res), level=8)
+
+        except elasticsearch.exceptions.NotFoundError, e:
+            log.debug("ES entry not found for key %s: %r", key, e)
+            res = None
+
+        except Exception, e:
+            log.warning("ES get exception: %r", e)
+            res = None
+
+        if res is not None and res.has_key('hits'):
+            result = dict(total=res['hits']['total'])
+            result['hits'] = [self._transform_result(x) for x in res['hits']['hits']]
+        else:
+            result = None
+
+        return result
+
+    def _build_query(self, params, boolean='AND'):
+        """
+            Convert the given list of query parameters into a Lucene query string
+        """
+        query = []
+        for p in params:
+            if isinstance(p, str):
+                # direct query string
+                query.append(p)
+
+            elif isinstance(p, tuple) and len(p) == 3:
+                # <field> <op> <value> triplet
+                (field, op, value) = p
+                op_ = '-' if op == '!=' else ''
+
+                if isinstance(value, list):
+                    value_ = '("' + '","'.join(value) + '")'
+                elif isinstance(value, tuple):
+                    value_ = '[%s TO %s]' % value
+                else:
+                    quote = '"' if not '*' in str(value) else ''
+                    value_ = quote + str(value) + quote
+
+                query.append('%s%s:%s' % (op_, field, value_))
+
+            elif isinstance(p, tuple) and len(p) == 2:
+                # group/subquery with boolean operator
+                (op, subquery) = p
+                query.append('(' + self._build_query(subquery, op) + ')')
+
+        return (' '+boolean+' ').join(query)
+
+    def _transform_result(self, res):
+        """
+            Turn an elasticsearch result item into a simple dict
+        """
+        result = res['_source'] if res.has_key('_source') else dict()
+        result['_id'] = res['_id']
+        result['_index'] = res['_index']
+        result['_doctype'] = res['_type']
+        result['_score'] = res['_score']
+
+        return result
 
     def resolve_username(self, user):
         """
@@ -193,6 +277,9 @@ class ElasticSearchStorage(object):
 
         if not notification.has_key('folder_uniqueid') and notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
             notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
+
+        if not notification.has_key('folder_uniqueid'):
+            notification['folder_uniqueid'] = hashlib.md5(notification[attrib]).hexdigest()
 
         body = {
             '@version': bonnie.API_VERSION,

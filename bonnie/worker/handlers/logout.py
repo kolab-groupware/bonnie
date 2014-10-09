@@ -21,6 +21,11 @@
     Base handler for an event notification of type 'Logout'
 """
 
+import time
+import datetime
+
+from dateutil.tz import tzutc
+from dateutil.parser import parse
 from bonnie.worker.handlers import HandlerBase
 
 class LogoutHandler(HandlerBase):
@@ -28,3 +33,48 @@ class LogoutHandler(HandlerBase):
 
     def __init__(self, *args, **kw):
         HandlerBase.__init__(self, *args, **kw)
+
+    def run(self, notification):
+        # lookup corresponding Login event and update that record with logout_time
+        # and suppress separate logging of this event with notification['_suppress_output'] = True
+        if notification.has_key('vnd.cmu.sessionId'):
+            now = datetime.datetime.now(tzutc())
+            attempts = 5
+            while attempts > 0:
+                results = self.worker.storage.select(
+                    query=[
+                        ('event', '=', 'Login'),
+                        ('session_id', '=', notification['vnd.cmu.sessionId'])
+                    ],
+                    index='logstash-*',
+                    doctype='logs',
+                    fields='user,@timestamp',
+                    limit=1
+                )
+                if results['total'] > 0:
+                    login_event = results['hits'][0]
+
+                    try:
+                        timestamp = parse(login_event['@timestamp'])
+                    except:
+                        timestamp = now
+
+                    delta = now - timestamp
+
+                    # update Login event record
+                    self.worker.storage.set(
+                        key=login_event['_id'],
+                        index=login_event['_index'],
+                        doctype=login_event['_doctype'],
+                        value={
+                            'logout_time': datetime.datetime.strftime(now, "%Y-%m-%dT%H:%M:%S.%fZ"),
+                            'duration': delta.days * 24 * 3600 + delta.seconds + delta.microseconds / 1e6
+                        }
+                    )
+                    notification['_suppress_output'] = True
+                    return (notification, [])
+
+                attempts -= 1
+                time.sleep(1) # wait for storage and try again
+
+        return super(LogoutHandler, self).run(notification)

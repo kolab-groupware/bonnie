@@ -33,7 +33,7 @@ class Job(PersistentBase):
     notification = db.Column(db.LargeBinary)
     worker_id = db.Column(db.String(64))
     client_id = db.Column(db.String(64))
-    collector_id = db.Column(db.String(64))
+    collector_id = db.Column(db.LargeBinary(64))
     command = db.Column(db.LargeBinary(32))
 
     def __init__(self, state=None, notification=None, worker_id=None, client_id=None, collector_id=None):

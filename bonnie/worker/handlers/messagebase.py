@@ -32,10 +32,14 @@ class MessageHandlerBase(HandlerBase):
         self.log = bonnie.getLogger('bonnie.worker.' + self.event)
 
     def run(self, notification):
+        # call super for some basic notification processing
+        (notification, jobs) = super(MessageHandlerBase, self).run(notification)
+
         # message notifications require message headers
         if not notification.has_key('messageHeaders'):
             self.log.debug("Adding HEADER job for " + self.event, level=8)
-            return (notification, [ b"HEADER" ])
+            jobs.append(b"HEADER")
+            return (notification, jobs)
 
-        return (notification, [])
+        return (notification, jobs)
 

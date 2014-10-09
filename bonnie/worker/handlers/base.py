@@ -12,4 +12,7 @@ class HandlerBase(object):
         self.worker = callback(interests)
 
     def run(self, notification):
+        if notification.has_key('user') and not notification.has_key('user_id'):
+            notification['user_id'] = self.worker.storage.resolve_username(notification['user'])
+
         return (notification, [])

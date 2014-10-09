@@ -30,9 +30,12 @@ class MessageAppendHandler(MessageHandlerBase):
         MessageHandlerBase.__init__(self, *args, **kw)
 
     def run(self, notification):
+        # call super for some basic notification processing
+        (notification, jobs) = super(MessageHandlerBase, self).run(notification)
+
         if not notification.has_key('messageContent') or notification['messageContent'] in [None, ""]:
             self.log.debug("Adding FETCH job for " + self.event, level=8)
             return (notification, [ b"FETCH" ])
 
-        return (notification, [])
+        return (notification, jobs)
 

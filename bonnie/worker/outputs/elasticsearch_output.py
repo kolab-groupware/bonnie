@@ -27,7 +27,7 @@ class ElasticSearchOutput(object):
         return 'elasticsearch_output'
 
     def register(self, callback):
-        callback({'_all': { 'callback': self.run }})
+        self.worker = callback({'_all': { 'callback': self.run }})
 
     def notification2log(self, notification):
         """
@@ -51,6 +51,7 @@ class ElasticSearchOutput(object):
             'flagNames':    'flag_names',
             'diskUsed':     'disk_used',
             'vnd.cmu.oldUidset': 'olduidset',
+            'vnd.cmu.sessionId': 'session_id',
         }
         log = { '@version': bonnie.API_VERSION }
         for key,val in notification.iteritems():
