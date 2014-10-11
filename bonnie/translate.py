@@ -26,7 +26,10 @@ import gettext
 import os
 
 N_ = lambda x: x
-_ = lambda x: gettext.ldgettext(domain, x)
+_ = lambda x: current.lgettext(x)
+
+localedir = '/usr/local/share/locale'
+current = gettext.translation(domain, localedir, fallback=True)
 
 def getDefaultLangs():
     languages = []
