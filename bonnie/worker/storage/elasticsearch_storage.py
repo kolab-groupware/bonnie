@@ -24,6 +24,8 @@ import re
 import json
 import urllib
 import hashlib
+import random
+import time
 import datetime
 import elasticsearch
 
@@ -42,6 +44,8 @@ class ElasticSearchStorage(object):
     default_doctype = 'object'
     folders_index = 'objects'
     folders_doctype = 'folder'
+    users_index = 'objects'
+    users_doctype = 'user'
 
     def __init__(self, *args, **kw):
         elasticsearch_output_address = conf.get('worker', 'elasticsearch_storage_address')
@@ -52,6 +56,8 @@ class ElasticSearchStorage(object):
         self.es = elasticsearch.Elasticsearch(
             host=elasticsearch_output_address
         )
+
+        self.user_id_cache = {}
 
     def name(self):
         return 'elasticsearch_storage'
@@ -186,7 +192,7 @@ class ElasticSearchStorage(object):
             log.debug("ES select result for %r: %r" % (args['q'] or args['body'], res), level=8)
 
         except elasticsearch.exceptions.NotFoundError, e:
-            log.debug("ES entry not found for key %s: %r", key, e)
+            log.debug("ES entry not found for %r: %r", args['q'] or args['body'], e)
             res = None
 
         except Exception, e:
@@ -245,16 +251,58 @@ class ElasticSearchStorage(object):
 
         return result
 
-    def resolve_username(self, user):
+    def resolve_username(self, user, user_data=None, force=False):
         """
             Resovle the given username to the corresponding nsuniqueid from LDAP
         """
         if not '@' in user:
             return user
 
-        # TODO: resolve with storage data
-        # return md5 sum of the username to make usernames work as fields/keys in elasticsearch
-        return hashlib.md5(user).hexdigest()
+        now = int(time.time())
+
+        # clean-up cache from time to time
+        if random.randint(0, 50) == 50:
+            for k,entry in self.user_id_cache.iteritems():
+                if entry[1] < now:
+                    del self.user_id_cache[k]
+
+        # return id cached in memory
+        if self.user_id_cache.has_key(user):
+            if self.user_id_cache[user][1] > now:
+                return self.user_id_cache[user][0]
+
+        user_id = None
+
+        # find existing entry in our storage backend
+        result = self.select(
+            [ ('user', '=', user) ],
+            index=self.users_index,
+            doctype=self.users_doctype,
+            sortby='@timestamp:desc',
+            limit=1
+        )
+
+        if result and result['total'] > 0:
+            user_id = result['hits'][0]['_id']
+
+        elif user_data and user_data.has_key('id'):
+            # user data (from LDAP) is provided
+            user_id = user_data['id']
+
+            # insert a user record into our database
+            del user_data['id']
+            user_data['user'] = user
+            user_data['@timestamp'] = datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            self.set(user_id, user_data, index=self.users_index, doctype=self.users_doctype)
+
+        elif force:
+            user_id = hashlib.md5(user).hexdigest()
+
+        # cache this for 10 minutes
+        if user_id is not None:
+            self.user_id_cache[user] = (user_id, now + 600)
+
+        return user_id
 
 
     def notificaton2folder(self, notification, attrib='uri'):
@@ -286,7 +334,7 @@ class ElasticSearchStorage(object):
             '@timestamp': datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'uniqueid': notification['folder_uniqueid'],
             'metadata': notification['metadata'],
-            'acl': dict((self.resolve_username(k),v) for k,v in notification['acl'].iteritems()),
+            'acl': dict((self.resolve_username(k, force=True),v) for k,v in notification['acl'].iteritems()),
             'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
             'owner': uri['user'] + '@' + uri['domain'] if uri['user'] is not None else 'nobody',
             'server': uri['host'],

@@ -39,7 +39,7 @@ class LogoutHandler(HandlerBase):
         # and suppress separate logging of this event with notification['_suppress_output'] = True
         if notification.has_key('vnd.cmu.sessionId'):
             now = datetime.datetime.now(tzutc())
-            attempts = 5
+            attempts = 8
             while attempts > 0:
                 results = self.worker.storage.select(
                     query=[
