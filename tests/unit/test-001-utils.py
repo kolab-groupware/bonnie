@@ -29,8 +29,8 @@ class TestBonnieUtils(unittest.TestCase):
         self.assertEqual(expand_uidset('3:5'), ['3','4','5'])
 
     def test_parse_imap_uri(self):
-        url = parse_imap_uri("imap://john.doe@example.org@kolab33.example.org/Calendar/Personal%20Calendar;UIDVALIDITY=1411487702/;UID=3")
-        self.assertEqual(url['host'],   'kolab33.example.org')
+        url = parse_imap_uri("imap://john.doe@example.org@kolab.example.org/Calendar/Personal%20Calendar;UIDVALIDITY=1411487702/;UID=3")
+        self.assertEqual(url['host'],   'kolab.example.org')
         self.assertEqual(url['user'],   'john.doe')
         self.assertEqual(url['domain'], 'example.org')
         self.assertEqual(url['path'],   'Calendar/Personal Calendar')
@@ -70,7 +70,7 @@ class TestBonnieUtils(unittest.TestCase):
         self.assertEqual(p2, "user/john.doe@example.org")
 
         # test shared folders (but how are they referred in the uri?)
-        p3 = imap_folder_path("imap://kolab33.example.org/Shared%20Folders/shared/Project-X%40example.org;UIDVALIDITY=1412093781/;UID=2")
+        p3 = imap_folder_path("imap://kolab.example.org/Shared%20Folders/shared/Project-X%40example.org;UIDVALIDITY=1412093781/;UID=2")
         self.assertEqual(p3, "shared/Project-X@example.org")
 
     def test_imap_mailbox_fs_path(self):
