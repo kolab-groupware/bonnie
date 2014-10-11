@@ -45,6 +45,7 @@ class Job(PersistentBase):
         self.collector_id = collector_id
         self.timestamp = time.time()
         self.command = None
+        self.retries = 0
 
         if self.client_id == None:
             if self.collector_id == None:
@@ -54,7 +55,7 @@ class Job(PersistentBase):
         else:
             self.type = 'Dealer'
 
-    def set_state(self, state):
+    def set_status(self, state):
         self.state = state
 
     def set_worker(self, worker_id):

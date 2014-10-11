@@ -39,7 +39,7 @@ class LogoutHandler(HandlerBase):
         # and suppress separate logging of this event with notification['_suppress_output'] = True
         if notification.has_key('vnd.cmu.sessionId'):
             now = datetime.datetime.now(tzutc())
-            attempts = 8
+            attempts = 4
             while attempts > 0:
                 results = self.worker.storage.select(
                     query=[
@@ -76,5 +76,8 @@ class LogoutHandler(HandlerBase):
 
                 attempts -= 1
                 time.sleep(1) # wait for storage and try again
+
+            # push back into the job queue, the corresponding Login event may not yet have been processed.
+            return (notification, [b"PUSHBACK"])
 
         return super(LogoutHandler, self).run(notification)

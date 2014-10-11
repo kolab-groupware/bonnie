@@ -76,7 +76,7 @@ class ZMQInput(object):
         pass
 
     def report_state(self):
-        print "reporting state", self.state
+        log.debug("[%s] reporting state: %s" % (self.identity, self.state), level=8)
         self.controller.send_multipart([b"STATE", self.state])
         self.report_timestamp = time.time()
 
@@ -118,18 +118,22 @@ class ZMQInput(object):
                     log.debug("[%s] Worker message: %r" % (self.identity, _message), level=9)
 
                     if _message[0] == "JOB":
+                        _job_uuid = _message[1]
+
                         # TODO: Sanity checking
                         #if _message[1] == self.job_id:
                         if not callback == None:
-                            (status, jobs) = callback(_message[2])
+                            (notification, jobs) = callback(_message[2])
+                        else:
+                            jobs = []
 
                         if len(jobs) == 0:
-                            self.controller.send_multipart([b"DONE", _message[1]])
+                            self.controller.send_multipart([b"DONE", _job_uuid])
                         else:
                             log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
 
                         for job in jobs:
-                            self.controller.send_multipart([job, _message[1]])
+                            self.controller.send_multipart([job, _job_uuid])
 
                         self.set_state_ready()
 

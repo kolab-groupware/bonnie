@@ -39,6 +39,7 @@ from worker import Worker
 from bonnie.broker import persistence
 
 class ZMQBroker(object):
+    MAX_RETRIES = 5
     running = False
 
     def __init__(self):
@@ -69,7 +70,7 @@ class ZMQBroker(object):
             return
 
         job = jobs.pop()
-        job.set_state(b"ALLOC")
+        job.set_status(b"ALLOC")
         return job
 
     def collect_jobs_with_status(self, _state, collector_id=None):
@@ -114,7 +115,7 @@ class ZMQBroker(object):
 
         job = jobs.pop()
 
-        job.set_state(b"ALLOC")
+        job.set_status(b"ALLOC")
         job.set_worker(_worker_id)
 
         return job.uuid
@@ -124,10 +125,19 @@ class ZMQBroker(object):
             self.worker_jobs.delete(job)
         log.debug("Worker job done: %s;" % (_job_uuid), level=8)
 
-    def worker_job_free(self, _job_uuid):
+    def worker_job_free(self, _job_uuid, pushback=False):
         for job in [x for x in self.worker_jobs if x.uuid == _job_uuid]:
             job.set_status(b"PENDING")
             job.set_worker(None)
+
+            if pushback:
+                # increment retry count on pushback
+                job.retries += 1
+                log.debug("Push back job %s for %d. time" % (_job_uuid, job.retries), level=8)
+                if job.retries > self.MAX_RETRIES:
+                    # delete job after MAX retries
+                    self.worker_jobs.delete(job)
+                    log.info("Delete pushed back job %s" % (_job_uuid))
 
     def worker_job_send(self, _job_uuid, _worker_id):
         # TODO: Sanity check on job state, worker assignment, etc.
@@ -225,10 +235,10 @@ class ZMQBroker(object):
         # reset existing jobs in self.worker_jobs and self.collect_jobs to status PENDING (?)
         # this will re-assign them to workers and collectors after a broker restart
         for job in self.worker_jobs:
-            job.set_state(b"PENDING")
+            job.set_status(b"PENDING")
 
         for job in self.collect_jobs:
-            job.set_state(b"PENDING")
+            job.set_status(b"PENDING")
 
         persistence.syncronize()
 
@@ -253,6 +263,9 @@ class ZMQBroker(object):
 
                     if _message[1] == b"DONE":
                         self.worker_job_done(_message[2])
+
+                    if _message[1] == b"PUSHBACK":
+                        self.worker_job_free(_message[2], True)
 
                     if _message[1] in self.collector_interests:
                         _job_uuid = _message[2]
@@ -330,14 +343,14 @@ class ZMQBroker(object):
 
     def transit_job_collect(self, _job_uuid, _command):
         for job in [x for x in self.worker_jobs if x.uuid == _job_uuid]:
-            job.set_state(b"PENDING")
+            job.set_status(b"PENDING")
             job.set_command(_command)
             self.collect_jobs.append(job)
             self.worker_jobs.remove(job)
 
     def transit_job_worker(self, _job_uuid, _notification):
         for job in [x for x in self.collect_jobs if x.uuid == _job_uuid]:
-            job.set_state(b"PENDING")
+            job.set_status(b"PENDING")
             job.notification = _notification
             self.worker_jobs.append(job)
             self.collect_jobs.remove(job)

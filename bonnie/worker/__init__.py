@@ -156,7 +156,6 @@ class BonnieWorker(object):
 
                 { 'MessageAppend': { 'callback': self.run } }
         """
-        print 'register_handler', interests
         for interest,how in interests.iteritems():
             if not self.handler_interests.has_key(interest):
                 self.handler_interests[interest] = []
