@@ -28,15 +28,15 @@ conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.dealer')
 
 class BonnieDealer(object):
-    output_modules = {}
-
     def __init__(self, *args, **kw):
+        self.output_modules = {}
+
         for _class in outputs.list_classes():
             __class = _class()
             self.output_modules[__class] = __class.register(callback=self.register_output)
 
     def register_output(self, interests):
-        self.output_interests = interests
+        pass
 
     def accept_notification(self, notification):
         parsed = json.loads(notification)

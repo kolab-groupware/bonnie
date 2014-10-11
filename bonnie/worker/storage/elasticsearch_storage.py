@@ -247,7 +247,9 @@ class ElasticSearchStorage(object):
         result['_id'] = res['_id']
         result['_index'] = res['_index']
         result['_doctype'] = res['_type']
-        result['_score'] = res['_score']
+
+        if res.has_key('_score'):
+            result['_score'] = res['_score']
 
         return result
 

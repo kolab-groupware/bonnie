@@ -48,7 +48,7 @@ class ZMQOutput(object):
         return 'zmq_output'
 
     def register(self, *args, **kw):
-        return [ 'MailboxCreate' ]
+        return self.run
 
     def run(self, notification):
         log.debug("[%s] Notification received: %r" % (self.dealer.identity, notification), level=9)
