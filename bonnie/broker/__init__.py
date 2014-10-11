@@ -86,7 +86,6 @@ class BonnieBroker(object):
 
             if pid == 0:
                 log.remove_stdout_handler()
-                signal.signal(signal.SIGTERM, self.terminate)
                 self.write_pid()
                 self.do_broker()
             elif not conf.fork_mode:
@@ -112,12 +111,14 @@ class BonnieBroker(object):
             print >> sys.stderr, "Traceback occurred, please report a " + \
                 "bug at https://issues.kolab.org"
 
-        if terminate:shutdown
+        if terminate:
             self.terminate()
 
         sys.exit(exitcode)
 
     def do_broker(self):
+        signal.signal(signal.SIGTERM, self.terminate)
+
         for interest, hows in self.broker_interests.iteritems():
             for how in hows:
                 how()
