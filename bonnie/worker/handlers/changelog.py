@@ -29,8 +29,8 @@ from bonnie.worker.handlers import HandlerBase
 
 log = bonnie.getLogger('bonnie.worker.changelog')
 
-# timestamp (* 100) at the year 2010
-REVBASE = 94668480000
+# timestamp (* 10) at the year 2014
+REVBASE = 13885344000
 
 class ChangelogHandler(HandlerBase):
     events = ['MessageAppend','vnd.cmu.MessageMove']
@@ -59,7 +59,7 @@ class ChangelogHandler(HandlerBase):
 
         # assign a revision number based on the current time
         if object_type is not None:
-            notification['revision'] = int(round(time.time() * 100 - REVBASE))
+            notification['revision'] = int(round(time.time() * 10 - REVBASE))
             # TODO: save object type and UUID in separate fields?
             # These are translated into headers.X-Kolab-Type and headers.Subject by the output module
 
