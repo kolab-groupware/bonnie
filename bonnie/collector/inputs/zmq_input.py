@@ -41,6 +41,7 @@ class ZMQInput(object):
     running = False
 
     def __init__(self, *args, **kw):
+        self.interests = []
         self.context = zmq.Context()
 
         zmq_broker_address = conf.get('collector', 'zmq_broker_address')
@@ -63,8 +64,8 @@ class ZMQInput(object):
         pass
 
     def report_state(self, interests=[]):
-        log.debug("[%s] Reporting state %s, %r" % (self.identity, self.state, interests), level=9)
-        self.collector.send_multipart([b"STATE", self.state, ",".join(interests)])
+        log.debug("[%s] Reporting state %s, %r" % (self.identity, self.state, self.interests), level=9)
+        self.collector.send_multipart([b"STATE", self.state, ",".join(self.interests)])
         self.report_timestamp = time.time()
 
     def run(self, callback=None, interests=[]):
@@ -73,7 +74,8 @@ class ZMQInput(object):
         self.running = True
 
         # report READY state with interests
-        self.report_state(interests)
+        self.interests = interests
+        self.report_state()
 
         while self.running:
             try:
