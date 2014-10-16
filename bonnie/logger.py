@@ -70,7 +70,7 @@ class Logger(logging.Logger):
                     loglevel = logging.DEBUG
 
             if '--logfile' == arg:
-                logfile = value if value is not None else None
+                logfile = value
                 continue
 
             if logfile is None:
@@ -154,8 +154,14 @@ class Logger(logging.Logger):
             self.console_stdout.close()
             self.removeHandler(self.console_stdout)
 
+    def info(self, msg, *args):
+        # Suppress info messages from other applications according to debug level
+        if not self.name.startswith('bonnie') and self.debuglevel < 8:
+            return
+
+        self.log(logging.INFO, '[%d]: %s' % (os.getpid(), msg) % args)
+
     def debug(self, msg, level=1, *args):
-        self.setLevel(self.loglevel)
         # Work around other applications not using various levels of debugging
         if not self.name.startswith('bonnie') and not self.debuglevel == 9:
             return
