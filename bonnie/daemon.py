@@ -21,10 +21,13 @@
 
 import os
 import sys
+import grp
+import pwd
 import signal
 import traceback
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie')
 
 class BonnieDaemon(object):
     pidfile = "/var/run/bonnie/bonnie.pid"
@@ -49,6 +52,26 @@ class BonnieDaemon(object):
                 help    = "Path to the PID file to use."
             )
 
+        daemon_group.add_option(
+                "-u",
+                "--user",
+                dest    = "process_username",
+                action  = "store",
+                default = "kolab",
+                help    = "Run as user USERNAME",
+                metavar = "USERNAME"
+            )
+
+        daemon_group.add_option(
+                "-g",
+                "--group",
+                dest    = "process_groupname",
+                action  = "store",
+                default = "kolab",
+                help    = "Run as group GROUPNAME",
+                metavar = "GROUPNAME"
+            )
+
         conf.finalize_conf()
 
     def run(self, *args, **kw):
@@ -62,7 +85,10 @@ class BonnieDaemon(object):
             Start the daemon
         """
         exitcode = 0
-        terminate = True
+        terminate = False
+
+        if conf.fork_mode:
+            self.drop_privileges()
 
         try:
             pid = 1
@@ -73,6 +99,7 @@ class BonnieDaemon(object):
                 self.write_pid()
                 self.signal_handlers()
                 self.run(*args, **kw)
+                terminate = True
             elif not conf.fork_mode:
                 self.signal_handlers()
                 self.run(*args, **kw)
@@ -106,7 +133,7 @@ class BonnieDaemon(object):
         """
             Daemon shutdown function
         """
-        pass
+        self.remove_pid()
 
     def signal_handlers(self):
         """
@@ -123,6 +150,77 @@ class BonnieDaemon(object):
         fp.write("%d\n" % (pid))
         fp.close()
 
+    def remove_pid(self, *args, **kw):
+        """
+            Remove our PID file.
+        """
+        if os.access(conf.pidfile, os.R_OK):
+            try:
+                os.remove(conf.pidfile)
+            except:
+                pass
+
+        raise SystemExit
+
+    def drop_privileges(self):
+        try:
+            try:
+                (ruid, euid, suid) = os.getresuid()
+                (rgid, egid, sgid) = os.getresgid()
+            except AttributeError, errmsg:
+                ruid = os.getuid()
+                rgid = os.getgid()
+
+            if ruid == 0:
+                # Means we can setreuid() / setregid() / setgroups()
+                if rgid == 0:
+                    # Get group entry details
+                    try:
+                        (
+                            group_name,
+                            group_password,
+                            group_gid,
+                            group_members
+                        ) = grp.getgrnam(conf.process_groupname)
+
+                    except KeyError:
+                        print >> sys.stderr, "Group %s does not exist" % (
+                                conf.process_groupname
+                            )
+
+                        sys.exit(1)
+
+                    # Set real and effective group if not the same as current.
+                    if not group_gid == rgid:
+                        log.debug("Switching real and effective group id to %d" % (group_gid), level=8)
+                        os.setregid(group_gid, group_gid)
+
+                if ruid == 0:
+                    # Means we haven't switched yet.
+                    try:
+                        (
+                            user_name,
+                            user_password,
+                            user_uid,
+                            user_gid,
+                            user_gecos,
+                            user_homedir,
+                            user_shell
+                        ) = pwd.getpwnam(conf.process_username)
+
+                    except KeyError:
+                        print >> sys.stderr, "User %s does not exist" % (conf.process_username)
+                        sys.exit(1)
+
+
+                    # Set real and effective user if not the same as current.
+                    if not user_uid == ruid:
+                        log.debug("Switching real and effective user id to %d" % (user_uid), level=8)
+                        os.setreuid(user_uid, user_uid)
+
+        except:
+            log.error("Could not change real and effective uid and/or gid")
+
 
 def daemonize():
     """
@@ -136,7 +234,7 @@ def daemonize():
             sys.exit(0) # exit first parent.
     except OSError, e:
         print >> sys.stderr, "Fork #1 failed: (%d) %s" % (e.errno, e.strerror)
-        raise sys.exit(1)
+        sys.exit(1)
 
     # Decouple from parent environment.
     # os.chdir("/")
