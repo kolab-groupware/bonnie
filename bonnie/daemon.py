@@ -85,7 +85,7 @@ class BonnieDaemon(object):
             Start the daemon
         """
         exitcode = 0
-        terminate = False
+        terminate = True
 
         if conf.fork_mode:
             self.drop_privileges()
@@ -99,10 +99,11 @@ class BonnieDaemon(object):
                 self.write_pid()
                 self.signal_handlers()
                 self.run(*args, **kw)
-                terminate = True
             elif not conf.fork_mode:
                 self.signal_handlers()
                 self.run(*args, **kw)
+            else:
+                terminate = False
 
         except SystemExit, errcode:
             terminate = False
