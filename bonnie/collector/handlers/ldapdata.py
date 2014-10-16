@@ -37,7 +37,7 @@ class LDAPDataHandler(object):
         # load pykolab conf
         self.pykolab_conf = pykolab.getConf()
         if not hasattr(self.pykolab_conf, 'defaults'):
-            self.pykolab_conf.finalize_conf()
+            self.pykolab_conf.finalize_conf(fatal=False)
 
         self.ldap = Auth()
         self.connections = 0

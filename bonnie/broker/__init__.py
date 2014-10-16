@@ -26,10 +26,6 @@ import brokers
 
 from bonnie.daemon import BonnieDaemon
 
-import bonnie
-conf = bonnie.getConf()
-log = bonnie.getLogger('bonnie.broker')
-
 class BonnieBroker(BonnieDaemon):
     pidfile = "/var/run/bonnie/broker.pid"
 

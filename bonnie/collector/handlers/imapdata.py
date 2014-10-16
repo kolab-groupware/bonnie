@@ -37,7 +37,7 @@ class IMAPDataHandler(object):
         # load pykolab conf
         conf = pykolab.getConf()
         if not hasattr(conf, 'defaults'):
-            conf.finalize_conf()
+            conf.finalize_conf(fatal=False)
 
         self.imap = IMAP()
 

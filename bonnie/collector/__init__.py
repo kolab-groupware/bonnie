@@ -24,21 +24,25 @@ import os
 import inputs
 import handlers
 
-import bonnie
 from bonnie.utils import parse_imap_uri
+from bonnie.daemon import BonnieDaemon
 
+import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.collector')
 
-class BonnieCollector(object):
-    input_interests = {}
-    input_modules = {}
-
-    handler_interests = {}
-    handler_modules = {}
-
+class BonnieCollector(BonnieDaemon):
+    pidfile = "/var/run/bonnie/collector.pid"
 
     def __init__(self, *args, **kw):
+        super(BonnieCollector, self).__init__(*args, **kw)
+
+        self.input_interests = {}
+        self.input_modules = {}
+
+        self.handler_interests = {}
+        self.handler_modules = {}
+
         # TODO: read active input module from config collector.input_modules
         for _class in inputs.list_classes():
             module = _class()
