@@ -21,17 +21,20 @@
 #
 
 import json
-
 import handlers
 import inputs
 import outputs
 import storage
 
+from bonnie.translate import _
+from bonnie.daemon import BonnieDaemon
+
 import bonnie
 conf = bonnie.getConf()
-from bonnie.translate import _
 
-class BonnieWorker(object):
+class BonnieWorker(BonnieDaemon):
+    pidfile = "/var/run/bonnie/worker.pid"
+
     handler_interests = { '_all': [] }
     input_interests = {}
     storage_interests = {}
@@ -43,27 +46,7 @@ class BonnieWorker(object):
     output_modules = {}
 
     def __init__(self, *args, **kw):
-
-        daemon_group = conf.add_cli_parser_option_group(_("Daemon Options"))
-
-        daemon_group.add_option(
-                "--fork",
-                dest    = "fork_mode",
-                action  = "store_true",
-                default = False,
-                help    = _("Fork to the background.")
-            )
-
-        daemon_group.add_option(
-                "-p",
-                "--pid-file",
-                dest    = "pidfile",
-                action  = "store",
-                default = "/var/run/bonnie/worker.pid",
-                help    = _("Path to the PID file to use.")
-            )
-
-        conf.finalize_conf()
+        super(BonnieWorker, self).__init__(*args, **kw)
 
         for _class in handlers.list_classes():
             __class = _class()
