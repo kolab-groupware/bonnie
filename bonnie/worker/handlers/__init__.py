@@ -6,6 +6,8 @@ import os
 import bonnie
 
 from base import HandlerBase
+from mailboxbase import MailboxHandlerBase
+from messagebase import MessageHandlerBase
 
 from aclchange import AclChangeHandler
 from flagsclear import FlagsClearHandler
@@ -17,7 +19,6 @@ from mailboxdelete import MailboxDeleteHandler
 from mailboxrename import MailboxRenameHandler
 from mailboxsubscribe import MailboxSubscribeHandler
 from mailboxunsubscribe import MailboxUnsubscribeHandler
-from messagebase import MessageHandlerBase
 from messageappend import MessageAppendHandler
 from messagecopy import MessageCopyHandler
 from messageexpire import MessageExpireHandler
@@ -37,6 +38,7 @@ __all__ = [
         'FlagsSetHandler',
         'LoginHandler',
         'LogoutHandler',
+        'MailboxHandlerBase',
         'MailboxCreateHandler',
         'MailboxDeleteHandler',
         'MailboxRenameHandler',

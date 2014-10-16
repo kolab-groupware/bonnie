@@ -119,6 +119,23 @@ class BonnieWorker(BonnieDaemon):
 
         return notification, list(set(jobs))
 
+    def input_report(self):
+        """
+            Periodic callbacks from the input main loop.
+            Forward to all handler, storage and output modules
+        """
+        for _handler in self.handler_modules.values():
+            if hasattr(_handler, 'report'):
+                _handler.report()
+
+        for _storage in self.storage_modules.values():
+            if hasattr(_storage, 'report'):
+                _storage.report()
+
+        for _storage in self.storage_modules.values():
+            if hasattr(_storage, 'report'):
+                _storage.report()
+
     def interest_callback(self, interest, notification):
         """
             Helper method to call an interest callback
@@ -173,7 +190,7 @@ class BonnieWorker(BonnieDaemon):
         input_modules = conf.get('worker', 'input_modules').split(',')
         for _input in self.input_modules.values():
             if _input.name() in input_modules:
-                _input.run(callback=self.event_notification)
+                _input.run(callback=self.event_notification, report=self.input_report)
 
     def terminate(self, *args, **kw):
         for _input in self.input_modules.values():

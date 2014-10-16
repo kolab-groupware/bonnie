@@ -21,25 +21,10 @@
     Base handler for an event notification of type 'MailboxRename'
 """
 
-from bonnie.worker.handlers import HandlerBase
+from bonnie.worker.handlers import MailboxHandlerBase
 
-class MailboxRenameHandler(HandlerBase):
+class MailboxRenameHandler(MailboxHandlerBase):
     event = 'MailboxRename'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
-
-    def run(self, notification):
-        # call super for some basic notification processing
-        (notification, jobs) = super(MailboxRenameHandler, self).run(notification)
-
-        # mailbox notifications require metadata
-        if not notification.has_key('metadata'):
-            jobs.append(b"GETMETADATA")
-            return (notification, jobs)
-
-        # extract uniqueid from metadata -> triggers the storage module
-        if notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
-            notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
-
-        return (notification, jobs)
+        MailboxHandlerBase.__init__(self, *args, **kw)

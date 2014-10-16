@@ -80,10 +80,11 @@ class ZMQInput(object):
         self.controller.send_multipart([b"STATE", self.state])
         self.report_timestamp = time.time()
 
-    def run(self, callback=None):
+    def run(self, callback=None, report=None):
         log.info("[%s] starting", self.identity)
 
         self.running = True
+        self.lastping = time.time()
         self.report_state()
 
         while self.running:
@@ -96,7 +97,9 @@ class ZMQInput(object):
                 log.error("zmq.Poller error: %r", e)
                 sockets = dict()
 
-            if self.report_timestamp < (time.time() - 60):
+            now = time.time()
+
+            if self.report_timestamp < (now - 60):
                 self.report_state()
 
             if self.controller in sockets:
@@ -139,6 +142,10 @@ class ZMQInput(object):
                             self.controller.send_multipart([job, _job_uuid])
 
                         self.set_state_ready()
+
+            if report is not None and self.lastping < (now - 60):
+                report()
+                self.lastping = now
 
         log.info("[%s] shutting down", self.identity)
         self.worker.close()

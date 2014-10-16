@@ -21,10 +21,10 @@
     Base handler for an event notification of type 'AclChange'
 """
 
-from bonnie.worker.handlers import HandlerBase
+from bonnie.worker.handlers import MailboxHandlerBase
 
-class AclChangeHandler(HandlerBase):
+class AclChangeHandler(MailboxHandlerBase):
     event = 'AclChange'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
+        MailboxHandlerBase.__init__(self, *args, **kw)

@@ -22,27 +22,10 @@
 """
 
 import bonnie
-from bonnie.worker.handlers import HandlerBase
+from bonnie.worker.handlers import MailboxHandlerBase
 
-class MailboxCreateHandler(HandlerBase):
+class MailboxCreateHandler(MailboxHandlerBase):
     event = 'MailboxCreate'
 
     def __init__(self, *args, **kw):
-        HandlerBase.__init__(self, *args, **kw)
-        self.log = bonnie.getLogger('bonnie.worker.' + self.event)
-
-    def run(self, notification):
-        # call super for some basic notification processing
-        (notification, jobs) = super(MailboxCreateHandler, self).run(notification)
-
-        # mailbox notifications require metadata
-        if not notification.has_key('metadata'):
-            self.log.debug("Adding GETMETADATA job for " + self.event, level=8)
-            jobs.append(b"GETMETADATA")
-            return (notification, jobs)
-
-        # extract uniqueid from metadata -> triggers the storage module
-        if notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
-            notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
-
-        return (notification, jobs)
+        MailboxHandlerBase.__init__(self, *args, **kw)

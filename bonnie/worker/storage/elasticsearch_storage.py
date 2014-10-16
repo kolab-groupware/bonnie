@@ -31,6 +31,7 @@ import elasticsearch
 
 from dateutil.tz import tzutc
 from bonnie.utils import parse_imap_uri
+from bonnie.worker.storage import CachedDict
 
 import bonnie
 conf = bonnie.getConf()
@@ -57,7 +58,9 @@ class ElasticSearchStorage(object):
             host=elasticsearch_output_address
         )
 
-        self.user_id_cache = {}
+        # use dicts with automatic expiration for caching user/folder lookups
+        self.user_id_cache = CachedDict(300)
+        self.folder_id_cache = CachedDict(120)
 
     def name(self):
         return 'elasticsearch_storage'
@@ -260,18 +263,9 @@ class ElasticSearchStorage(object):
         if not '@' in user:
             return user
 
-        now = int(time.time())
-
-        # clean-up cache from time to time
-        if random.randint(0, 50) == 50:
-            for k,entry in self.user_id_cache.iteritems():
-                if entry[1] < now:
-                    del self.user_id_cache[k]
-
         # return id cached in memory
         if self.user_id_cache.has_key(user):
-            if self.user_id_cache[user][1] > now:
-                return self.user_id_cache[user][0]
+            return self.user_id_cache[user]
 
         user_id = None
 
@@ -300,9 +294,9 @@ class ElasticSearchStorage(object):
         elif force:
             user_id = hashlib.md5(user).hexdigest()
 
-        # cache this for 10 minutes
+        # cache this for 5 minutes
         if user_id is not None:
-            self.user_id_cache[user] = (user_id, now + 600)
+            self.user_id_cache[user] = user_id
 
         return user_id
 
@@ -368,7 +362,15 @@ class ElasticSearchStorage(object):
         if not notification.has_key(attrib) or notification.has_key('folder_id'):
             return (notification, [])
 
-        log.debug("Resolve folder for %r = %r" % (attrib, notification[attrib]), level=8)
+        now = int(time.time())
+        base_uri = re.sub(';.+$', '', notification[attrib])
+
+        log.debug("Resolve folder for %r = %r" % (attrib, base_uri), level=8)
+
+        # return id cached in memory
+        if not notification.has_key('metadata') and self.folder_id_cache.has_key(base_uri):
+            notification['folder_id'] = self.folder_id_cache[base_uri]
+            return (notification, [])
 
         # mailbox resolving requires metadata
         if not notification.has_key('metadata'):
@@ -432,6 +434,15 @@ class ElasticSearchStorage(object):
 
         # add reference to internal folder_id
         if folder is not None:
+            self.folder_id_cache[base_uri] = folder['id']
             notification['folder_id'] = folder['id']
 
         return (notification, [])
+
+    def report(self):
+        """
+            Callback from the worker main loop to trigger periodic jobs
+        """
+        # clean-up in-memory caches from time to time
+        self.user_id_cache.expunge()
+        self.folder_id_cache.expunge()
