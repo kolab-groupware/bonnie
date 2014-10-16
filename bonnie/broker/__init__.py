@@ -22,42 +22,22 @@
 """
     This is the broker for Bonnie.
 """
-import sys, os
-import signal
-import traceback
 import brokers
 
-from bonnie.utils import daemonize
+from bonnie.daemon import BonnieDaemon
 
 import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.broker')
 
-class BonnieBroker(object):
-    broker_interests = {}
-    broker_modules = {}
+class BonnieBroker(BonnieDaemon):
+    pidfile = "/var/run/bonnie/broker.pid"
 
     def __init__(self, *args, **kw):
-        daemon_group = conf.add_cli_parser_option_group("Daemon Options")
+        super(BonnieBroker, self).__init__(*args, **kw)
 
-        daemon_group.add_option(
-                "--fork",
-                dest    = "fork_mode",
-                action  = "store_true",
-                default = False,
-                help    = "Fork to the background."
-            )
-
-        daemon_group.add_option(
-                "-p",
-                "--pid-file",
-                dest    = "pidfile",
-                action  = "store",
-                default = "/var/run/bonnie/broker.pid",
-                help    = "Path to the PID file to use."
-            )
-
-        conf.finalize_conf()
+        self.broker_interests = {}
+        self.broker_modules = {}
 
         for _class in brokers.list_classes():
             module = _class()
@@ -76,49 +56,6 @@ class BonnieBroker(object):
             self.broker_interests[interest].append(how)
 
     def run(self, *args, **kw):
-        exitcode = 0
-        terminate = True
-
-        try:
-            pid = 1
-            if conf.fork_mode:
-                pid = daemonize()
-
-            if pid == 0:
-                log.remove_stdout_handler()
-                self.write_pid()
-                self.do_broker()
-            elif not conf.fork_mode:
-                self.do_broker()
-
-        except SystemExit, errcode:
-            terminate = False
-            exitcode = errcode
-
-        except KeyboardInterrupt:
-            exitcode = 1
-            log.info("Interrupted by user")
-
-        except (AttributeError, TypeError) as errmsg:
-            exitcode = 1
-            traceback.print_exc()
-            print >> sys.stderr, "Traceback occurred, please report a " + \
-                "bug at https://issues.kolab.org"
-
-        except:
-            exitcode = 2
-            traceback.print_exc()
-            print >> sys.stderr, "Traceback occurred, please report a " + \
-                "bug at https://issues.kolab.org"
-
-        if terminate:
-            self.terminate()
-
-        sys.exit(exitcode)
-
-    def do_broker(self):
-        signal.signal(signal.SIGTERM, self.terminate)
-
         for interest, hows in self.broker_interests.iteritems():
             for how in hows:
                 how()
@@ -129,9 +66,3 @@ class BonnieBroker(object):
                 module.terminate()
             else:
                 module.running = False
-
-    def write_pid(self):
-        pid = os.getpid()
-        fp = open(conf.pidfile, 'w')
-        fp.write("%d\n" % (pid))
-        fp.close()

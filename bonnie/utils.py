@@ -1,5 +1,4 @@
 import os
-import sys
 import urllib
 import urlparse
 import datetime
@@ -223,34 +222,3 @@ def imap_mailbox_fs_path(uri):
 
     return mailbox_path
 
-
-def daemonize():
-    """
-        This forks the current process into a daemon.
-    """
-    # do the UNIX double-fork magic, see Stevens' "Advanced 
-    # Programming in the UNIX Environment" for details (ISBN 0201563177)
-    try:
-        pid = os.fork()
-        if pid > 0:
-            sys.exit(0) # exit first parent.
-    except OSError, e:
-        print >> sys.stderr, "Fork #1 failed: (%d) %s" % (e.errno, e.strerror)
-        raise sys.exit(1)
-
-    # Decouple from parent environment.
-    # os.chdir("/")
-    os.umask(0)
-    os.setsid()
-
-    # Do second fork.
-    try:
-        pid = os.fork()
-        if pid > 0:
-            sys.exit(0) # exit second parent.
-    except OSError, e:
-        print >> sys.stderr, "Fork #2 failed: (%d) %s" % (e.errno, e.strerror)
-        sys.exit(1)
-
-    return pid
-    
