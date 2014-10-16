@@ -36,35 +36,50 @@ class Logger(logging.Logger):
     """
     debuglevel = 0
     fork = False
+    logfile = '/var/log/bonnie/bonnie.log'
     loglevel = logging.CRITICAL
 
     if hasattr(sys, 'argv'):
         for arg in sys.argv:
+            value = None
+            if '=' in arg:
+                (arg,value) = arg.split('=')[0:2]
+
+            if '-d' == arg or '--debug' == arg:
+                debuglevel = value if value is not None else -1
+                continue
+
             if debuglevel == -1:
                 try:
                     debuglevel = int(arg)
                 except ValueError, errmsg:
+                    debuglevel = 0
                     continue
 
                 loglevel = logging.DEBUG
-                break
-
-            if '-d' == arg:
-                debuglevel = -1
                 continue
 
             if '-l' == arg:
                 loglevel = -1
                 continue
 
-            if '--fork' == arg:
-                fork = True
-
             if loglevel == -1:
                 if hasattr(logging,arg.upper()):
                     loglevel = getattr(logging,arg.upper())
                 else:
                     loglevel = logging.DEBUG
+
+            if '--logfile' == arg:
+                logfile = value if value is not None else None
+                continue
+
+            if logfile is None:
+                logfile = arg
+                continue
+
+            if '--fork' == arg:
+                fork = True
+                continue
 
     def __init__(self, *args, **kw):
         if kw.has_key('name'):
@@ -86,8 +101,10 @@ class Logger(logging.Logger):
 
         if kw.has_key('logfile'):
             self.logfile = kw['logfile']
-        else:
+        elif self.logfile is None:
             self.logfile = '/var/log/bonnie/bonnie.log'
+
+        self.setLevel(self.loglevel)
 
         # Make sure (read: attempt to change) the permissions
         try:
