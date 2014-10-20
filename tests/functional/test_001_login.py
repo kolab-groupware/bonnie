@@ -1,12 +1,8 @@
-import os
 import json
 import time
 
 from . import TestBonnieFunctional
 from bonnie.dealer import BonnieDealer
-
-pwd = os.path.dirname(__file__)
-basedir = os.path.join(pwd, '..', '..')
 
 import bonnie
 conf = bonnie.getConf()
@@ -31,6 +27,7 @@ class TestBonnieLogin(TestBonnieFunctional):
         event = events[0]
         self.assertTrue(event.has_key('user_id'))
         self.assertTrue(event['session_id'], login['vnd.cmu.sessionId'])
+        self.assertEqual(event['@version'], bonnie.API_VERSION)
 
         del dealer
         time.sleep(1)

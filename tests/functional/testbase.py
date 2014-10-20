@@ -15,6 +15,7 @@ conf = bonnie.getConf()
 conf.finalize_conf()
 
 class TestBonnieFunctional(unittest.TestCase):
+    attempts = 12
 
     def setUp(self):
         self.storage = ElasticSearchStorage()
@@ -29,7 +30,7 @@ class TestBonnieFunctional(unittest.TestCase):
         time.sleep(2)
 
     def query_log(self, query):
-        attempts = 10
+        attempts = self.attempts
         while attempts > 0:
             attempts -= 1
             res = self.storage.select(query, index='logstash-*', doctype='logs', sortby='@timestamp:desc')
@@ -42,7 +43,7 @@ class TestBonnieFunctional(unittest.TestCase):
         return None
 
     def storage_get(self, key, index, doctype):
-        attempts = 10
+        attempts = self.attempts
         while attempts > 0:
             attempts -= 1
             res = self.storage.get(key, index=index, doctype=doctype)
