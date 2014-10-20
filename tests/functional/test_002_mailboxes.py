@@ -11,7 +11,7 @@ basedir = os.path.join(pwd, '..', '..')
 import bonnie
 conf = bonnie.getConf()
 
-class TestBonnieMailboxCreate(TestBonnieFunctional):
+class TestBonnieMailboxes(TestBonnieFunctional):
 
     def test_mailboxcreate(self):
         dealer = BonnieDealer()
