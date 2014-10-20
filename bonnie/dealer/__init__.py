@@ -43,8 +43,13 @@ class BonnieDealer(object):
         event = parsed['event']
         user = parsed['user'] if parsed.has_key('user') else None
 
-        blacklist_events = conf.get('dealer', 'blacklist_events').split(',')
-        blacklist_users  = conf.get('dealer', 'blacklist_users').split(',')
+        # ignore globally excluded events
+        exclude_events = conf.get('dealer', 'input_exclude_events', '').split(',')
+        if event in exclude_events:
+            return False
+
+        blacklist_events = conf.get('dealer', 'blacklist_events', '').split(',')
+        blacklist_users  = conf.get('dealer', 'blacklist_users', '').split(',')
 
         # ignore blacklisted events for blacklisted users
         if event in blacklist_events and user is not None and user in blacklist_users:

@@ -147,6 +147,8 @@ class BonnieWorkerProcess(object):
                 self.storage_modules[_class] = _storage
                 self.storage = _storage
 
+        self.output_exclude_events = conf.get('worker', 'output_exclude_events', '').split(',')
+
     def event_notification(self, notification):
         """
             Input an event notification in to our process.
@@ -180,7 +182,7 @@ class BonnieWorkerProcess(object):
                         jobs.extend(_jobs)
 
         # finally send notification to output handlers if no jobs remaining
-        if len(jobs) == 0 and not notification.has_key('_suppress_output'):
+        if len(jobs) == 0 and not notification.has_key('_suppress_output') and not event in self.output_exclude_events:
             if self.output_interests.has_key(event):
                 for interest in self.output_interests[event]:
                     (notification, _jobs) = self.interest_callback(interest, notification)
