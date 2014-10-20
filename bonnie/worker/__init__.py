@@ -21,20 +21,92 @@
 #
 
 import json
+import time
 import handlers
 import inputs
 import outputs
 import storage
+import signal
 
 from bonnie.translate import _
 from bonnie.daemon import BonnieDaemon
+from multiprocessing import Process
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie.worker')
 
 class BonnieWorker(BonnieDaemon):
     pidfile = "/var/run/bonnie/worker.pid"
 
+    def __init__(self, *args, **kw):
+        worker_group = conf.add_cli_parser_option_group("Worker Options")
+
+        worker_group.add_option(
+                "-n",
+                "--num-childs",
+                dest    = "num_childs",
+                action  = "store",
+                default = None,
+                help    = "Number of child processes to spawn"
+            )
+
+        super(BonnieWorker, self).__init__(*args, **kw)
+
+        self.childs = []
+        self.manager = False
+        self.running = False
+
+    def run(self):
+        """
+            Daemon main loop
+        """
+        num_childs = conf.num_childs or conf.get('worker', 'num_childs', 0)
+
+        if num_childs is None or num_childs < 1:
+            main = BonnieWorkerProcess()
+            self.childs.append(main)
+            main.run()  # blocking
+        else:
+            conf.fork_mode = False
+            num_childs = int(num_childs)
+            self.manager = True
+            self.running = True
+
+            while self.running:
+                # (re)start child worker processes
+                while len(self.childs) < num_childs:
+                    p = Process(target=self.run_child)
+                    self.childs.append(p)
+                    p.start()
+
+                # check states of child processes
+                for p in self.childs:
+                    if not p.is_alive():
+                        log.info("Restarting dead worker process %r", p.pid)
+                        self.childs.remove(p)
+
+                time.sleep(10)
+
+        log.info("Shutting down worker manager")
+
+    def run_child(self):
+        """
+            This method is being run in a separate process
+        """
+        BonnieWorkerProcess(as_child=True).run()
+
+    def terminate(self, *args, **kw):
+        self.running = False
+        for p in self.childs:
+            p.terminate()
+
+        if self.manager:
+            for p in self.childs:
+                p.join()
+
+
+class BonnieWorkerProcess(object):
     handler_interests = { '_all': [] }
     input_interests = {}
     storage_interests = {}
@@ -45,8 +117,9 @@ class BonnieWorker(BonnieDaemon):
     storage_modules = {}
     output_modules = {}
 
-    def __init__(self, *args, **kw):
-        super(BonnieWorker, self).__init__(*args, **kw)
+    def __init__(self, as_child=False, *args, **kw):
+        if as_child:
+            signal.signal(signal.SIGTERM, self.terminate)
 
         for _class in handlers.list_classes():
             __class = _class()
