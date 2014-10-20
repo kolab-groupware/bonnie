@@ -52,6 +52,8 @@ class ElasticSearchOutput(object):
             'diskUsed':     'disk_used',
             'vnd.cmu.oldUidset': 'olduidset',
             'vnd.cmu.sessionId': 'session_id',
+            'vnd.cmu.midset': 'message_id',
+            'vnd.cmu.unseenMessages': 'unseen_messages',
         }
         log = { '@version': bonnie.API_VERSION }
         for key,val in notification.iteritems():
@@ -85,6 +87,11 @@ class ElasticSearchOutput(object):
                 notification['message'] = None
                 if notification.has_key('messageContent') and notification['messageContent'].has_key(uid):
                     notification['message'] = notification['messageContent'][uid]
+                    # no need for bodystructure if we have the real message content
+                    notification.pop('bodyStructure', None)
+
+                # remove vnd.cmu.envelope if we have headers
+                notification.pop('vnd.cmu.envelope', None)
 
                 self.es.create(
                     index=index,

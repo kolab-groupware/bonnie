@@ -63,10 +63,10 @@ class TestBonnieMessageEvents(TestBonnieFunctional):
         self.assertEqual(event['service'], 'lmtpunix')
         self.assertEqual(event['session_id'], messagenew['vnd.cmu.sessionId'])
         self.assertEqual(event['@timestamp'], '2014-10-20T11:34:14.966000Z')
-        self.assertEqual(len(event['vnd.cmu.midset']), 1)
+        self.assertEqual(len(event['message_id']), 1)
 
         self.assertIsInstance(event['headers'], dict)
-        self.assertTrue(event['headers']['Message-ID'] in event['vnd.cmu.midset'])
+        self.assertTrue(event['headers']['Message-ID'] in event['message_id'])
         self.assertTrue(event['headers']['Subject'] in messagenew['messageHeaders']['6']['Subject'])
 
         # check if message payload is parsable
@@ -140,7 +140,7 @@ class TestBonnieMessageEvents(TestBonnieFunctional):
         self.assertIsInstance(event['headers'], dict)
         self.assertEqual(len(event['headers']['To']), 1)
         self.assertEqual(event['headers']['Content-Type'], 'text/plain')
-        self.assertTrue(event['headers']['Message-ID'] in event['vnd.cmu.midset'])
+        self.assertTrue(event['headers']['Message-ID'] in event['message_id'])
 
 
     def test_003_messageread(self):
@@ -164,7 +164,7 @@ class TestBonnieMessageEvents(TestBonnieFunctional):
         dealer.run(json.dumps(messageread))
 
         # query by message-ID
-        events = self.query_log([('vnd.cmu.midset','=','<e0ffe5d5a1569a35c1b62791390a48d5@example.org>')])
+        events = self.query_log([('message_id','=','<e0ffe5d5a1569a35c1b62791390a48d5@example.org>')])
         self.assertEqual(len(events), 1)
 
         event = events[0]
@@ -194,13 +194,13 @@ class TestBonnieMessageEvents(TestBonnieFunctional):
         dealer.run(json.dumps(flagsclear))
 
         # query by message-ID
-        events = self.query_log([('vnd.cmu.midset','=','<e0ffe5d5a1569a35c1b62791390a48d5@example.org>')])
+        events = self.query_log([('message_id','=','<e0ffe5d5a1569a35c1b62791390a48d5@example.org>')])
         self.assertEqual(len(events), 1)
 
         event = events[0]
         self.assertEqual(event['uidset'], '4')
         self.assertEqual(event['flag_names'], '\Seen')
-        self.assertEqual(event['vnd.cmu.unseenMessages'], 1)
+        self.assertEqual(event['unseen_messages'], 1)
         self.assertTrue(event.has_key('user_id'))
         self.assertTrue(event.has_key('folder_id'))
 
@@ -242,5 +242,6 @@ class TestBonnieMessageEvents(TestBonnieFunctional):
 
         event = events[0]
         self.assertTrue(event['headers']['Subject'] in messagetrash['messageHeaders']['36']['Subject'])
+        self.assertEqual(len(event['message_id']), 0)
 
         
