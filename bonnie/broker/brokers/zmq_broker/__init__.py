@@ -113,7 +113,8 @@ class ZMQBroker(object):
         if len(jobs) < 1:
             return None
 
-        job = jobs.pop()
+        # take the first job in the queue
+        job = jobs[0]
 
         job.set_status(b"ALLOC")
         job.set_worker(_worker_id)
