@@ -61,7 +61,9 @@ class BonnieWorker(BonnieDaemon):
         """
             Daemon main loop
         """
-        num_childs = conf.num_childs or conf.get('worker', 'num_childs', 0)
+        num_childs = conf.num_childs or conf.get('worker', 'num_childs')
+        if num_childs is not None:
+            num_childs = int(num_childs)
 
         if num_childs is None or num_childs < 1:
             main = BonnieWorkerProcess()
@@ -69,7 +71,6 @@ class BonnieWorker(BonnieDaemon):
             main.run()  # blocking
         else:
             conf.fork_mode = False
-            num_childs = int(num_childs)
             self.manager = True
             self.running = True
 
