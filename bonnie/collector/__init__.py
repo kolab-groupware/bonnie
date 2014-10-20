@@ -43,18 +43,6 @@ class BonnieCollector(BonnieDaemon):
         self.handler_interests = {}
         self.handler_modules = {}
 
-        # TODO: read active input module from config collector.input_modules
-        for _class in inputs.list_classes():
-            module = _class()
-            module.register(callback=self.register_input)
-            self.input_modules[_class] = module
-
-        # TODO: read active handler module from config collector.handler_modules
-        for _class in handlers.list_classes():
-            handler = _class()
-            handler.register(callback=self.register_handler)
-            self.handler_modules[_class] = handler
-
     def execute(self, command, notification):
         """
             Dispatch collector job to the according handler(s)
@@ -78,6 +66,18 @@ class BonnieCollector(BonnieDaemon):
             self.handler_interests[interest].append(how)
 
     def run(self):
+        # TODO: read active input module from config collector.input_modules
+        for _class in inputs.list_classes():
+            module = _class()
+            module.register(callback=self.register_input)
+            self.input_modules[_class] = module
+
+        # TODO: read active handler module from config collector.handler_modules
+        for _class in handlers.list_classes():
+            handler = _class()
+            handler.register(callback=self.register_handler)
+            self.handler_modules[_class] = handler
+
         input_modules = conf.get('collector', 'input_modules').split(',')
         for _input in self.input_modules.values():
             if _input.name() in input_modules:

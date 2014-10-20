@@ -39,7 +39,25 @@ class ZMQInput(object):
     running = False
 
     def __init__(self, *args, **kw):
+        self.state = b"READY"
+        self.job_id = None
+        self.lastping = 0
+        self.report_timestamp = 0
+
+    def name(self):
+        return 'zmq_input'
+
+    def register(self, *args, **kw):
+        pass
+
+    def report_state(self):
+        log.debug("[%s] reporting state: %s" % (self.identity, self.state), level=8)
+        self.controller.send_multipart([b"STATE", self.state])
+        self.report_timestamp = time.time()
+
+    def run(self, callback=None, report=None):
         self.identity = u"Worker-%s-%d" % (socket.getfqdn(),os.getpid())
+        log.info("[%s] starting", self.identity)
 
         self.context = zmq.Context()
 
@@ -64,24 +82,6 @@ class ZMQInput(object):
         self.poller = zmq.Poller()
         self.poller.register(self.controller, zmq.POLLIN)
         self.poller.register(self.worker, zmq.POLLIN)
-
-        self.state = b"READY"
-        self.job_id = None
-        self.report_timestamp = time.time()
-
-    def name(self):
-        return 'zmq_input'
-
-    def register(self, *args, **kw):
-        pass
-
-    def report_state(self):
-        log.debug("[%s] reporting state: %s" % (self.identity, self.state), level=8)
-        self.controller.send_multipart([b"STATE", self.state])
-        self.report_timestamp = time.time()
-
-    def run(self, callback=None, report=None):
-        log.info("[%s] starting", self.identity)
 
         self.running = True
         self.lastping = time.time()

@@ -185,10 +185,7 @@ class BonnieDaemon(object):
                         ) = grp.getgrnam(conf.process_groupname)
 
                     except KeyError:
-                        print >> sys.stderr, "Group %s does not exist" % (
-                                conf.process_groupname
-                            )
-
+                        print >> sys.stderr, "Group %s does not exist" % (conf.process_groupname)
                         sys.exit(1)
 
                     # Set real and effective group if not the same as current.
