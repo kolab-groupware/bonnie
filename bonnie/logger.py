@@ -156,6 +156,8 @@ class Logger(logging.Logger):
 
     def info(self, msg, *args):
         # Suppress info messages from other applications according to debug level
+        if self.name.startswith('sqlalchemy') and self.debuglevel < 9:
+            return
         if not self.name.startswith('bonnie') and self.debuglevel < 8:
             return
 

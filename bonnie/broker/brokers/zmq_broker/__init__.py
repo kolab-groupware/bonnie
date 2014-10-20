@@ -139,6 +139,10 @@ class ZMQBroker(object):
                     # delete job after MAX retries
                     self.worker_jobs.delete(job)
                     log.info("Delete pushed back job %s" % (_job_uuid))
+                else:
+                    # move it to the end of the job queue
+                    self.worker_jobs.remove(job)
+                    self.worker_jobs.append(job)
 
     def worker_job_send(self, _job_uuid, _worker_id):
         # TODO: Sanity check on job state, worker assignment, etc.
