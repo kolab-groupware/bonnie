@@ -91,4 +91,10 @@ class TestBonniePersistence(unittest.TestCase):
 
         self.assertEqual(len(worker_jobs), 2)
         self.assertEqual(len(collector_jobs), 1)
-        
+
+        # move job to the end of the queue
+        worker_jobs.remove(two)
+        worker_jobs.append(two)
+
+        self.assertEqual(worker_jobs[0], done)
+        self.assertEqual(worker_jobs[-1], two)
