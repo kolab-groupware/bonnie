@@ -51,7 +51,7 @@ class LogoutHandler(HandlerBase):
                     fields='user,@timestamp',
                     limit=1
                 )
-                if results['total'] > 0:
+                if results and results['total'] > 0:
                     login_event = results['hits'][0]
 
                     try:
