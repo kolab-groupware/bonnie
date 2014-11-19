@@ -1,19 +1,19 @@
 #! /bin/bash
 #
-# bonnie-broker  Start/Stop the Bonnie Broker daemon
+# bonnie-collector  Start/Stop the Bonnie Broker daemon
 #
 # chkconfig:        - 65 10
-# description:      The Bonnie Broker daemon is a message broker.
-# processname: bonnie-broker
+# description:      The Bonnie Broker daemon is a message collector.
+# processname: bonnie-collector
 
 ### BEGIN INIT INFO
-# Provides: bonnie-brokerd
+# Provides: bonnie-collectord
 # Default-Start: -
 # Default-Stop: 0 1 2 6
 # Required-Start: $remote_fs $local_fs $network
 # Required-Stop: $remote_fs $local_fs $network
 # Short-Description: Start/Stop the Bonnie Broker daemon
-# Description:      The Bonnie Broker daemon is a message broker.
+# Description:      The Bonnie Broker daemon is a message collector.
 ### END INIT INFO
 
 # Source function library.
@@ -26,22 +26,22 @@ FLAGS="--fork -l warning"
 USER="bonnie"
 GROUP="bonnie"
 
-if [ -f /etc/sysconfig/bonnie-broker ] ; then
-    . /etc/sysconfig/bonnie-broker
+if [ -f /etc/sysconfig/bonnie-collector ] ; then
+    . /etc/sysconfig/bonnie-collector
 fi
 
-if [ -f /etc/default/bonnie-broker ]; then
-    . /etc/default/bonnie-broker
+if [ -f /etc/default/bonnie-collector ]; then
+    . /etc/default/bonnie-collector
 fi
 
 RETVAL=0
 
 # Set up some common variables before we launch into what might be
 # considered boilerplate by now.
-prog=bonnie-broker
-path=/usr/sbin/bonnie-broker
+prog=bonnie-collector
+path=/usr/sbin/bonnie-collector
 lockfile=/var/lock/subsys/$prog
-pidfile=/var/run/bonnie/bonnie-broker.pid
+pidfile=/var/run/bonnie/bonnie-collector.pid
 
 [ ! -d "$(dirname ${pidfile})" ] && mkdir -p $(dirname ${pidfile})
 chown ${USER}:${GROUP} $(dirname ${pidfile})
