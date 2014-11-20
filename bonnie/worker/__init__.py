@@ -118,6 +118,7 @@ class BonnieWorkerProcess(object):
     storage_modules = {}
     output_modules = {}
 
+    output_exclude_events = []
     def __init__(self, as_child=False, *args, **kw):
         if as_child:
             signal.signal(signal.SIGTERM, self.terminate)
@@ -147,7 +148,9 @@ class BonnieWorkerProcess(object):
                 self.storage_modules[_class] = _storage
                 self.storage = _storage
 
-        self.output_exclude_events = conf.get('worker', 'output_exclude_events', '').split(',')
+        output_exclude_events = conf.get('worker', 'output_exclude_events', None)
+        if not output_exclude_events == None:
+            self.output_exclude_events = output_exclude_events.split(',')
 
     def event_notification(self, notification):
         """
