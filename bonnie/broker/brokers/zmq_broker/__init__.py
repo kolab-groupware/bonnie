@@ -25,6 +25,7 @@
 
 import copy
 import random
+import re
 import sys
 import time
 import zmq
@@ -287,6 +288,7 @@ class ZMQBroker(object):
                     _client_id = _message[0]
                     _notification = _message[1]
                     _collector_id = _client_id.replace('Dealer', 'Collector')
+                    _collector_id = re.sub(r'-[0-9]+$', '', _collector_id)
                     self.worker_job_add(_notification, client_id=_client_id, collector_id=_collector_id)
 
                     dealer_router.send_multipart([_message[0], b"ACK"])

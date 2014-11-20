@@ -38,7 +38,7 @@ class ZMQOutput(object):
             zmq_broker_address = "tcp://localhost:5570"
 
         self.dealer = self.context.socket(zmq.DEALER)
-        self.dealer.identity = (u"Dealer-%s" % (socket.getfqdn())).encode('ascii')
+        self.dealer.identity = (u"Dealer-%s-%s" % (socket.getfqdn(), os.getpid())).encode('ascii')
         self.dealer.connect(zmq_broker_address)
 
         self.poller = zmq.Poller()
