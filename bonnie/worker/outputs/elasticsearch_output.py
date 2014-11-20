@@ -77,7 +77,7 @@ class ElasticSearchOutput(object):
             timestamp = datetime.datetime.now(tzutc())
 
         notification['@timestamp'] = datetime.datetime.strftime(timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
-        index = 'logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y-%m-%d"))
+        index = 'logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y.%m.%d"))
 
         # for notifications concerning multiple messages, create entries for each message
         if notification.has_key('messageHeaders') and isinstance(notification['messageHeaders'], dict) and len(notification['messageHeaders']) > 0:
