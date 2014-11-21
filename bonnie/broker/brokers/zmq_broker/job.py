@@ -80,9 +80,9 @@ def select_by_type_and_state(job_type, state, limit=-1):
     db = init_db('jobs')
 
     if limit == -1:
-        result = db.query(Job).filter_by(job_type=job_type, state=state).all()
+        result = db.query(Job).filter_by(job_type=job_type, state=state).order_by(Job.timestamp).all()
     else:
-        result = db.query(Job).filter_by(job_type=job_type, state=state).limit(limit).all()
+        result = db.query(Job).filter_by(job_type=job_type, state=state).order_by(Job.timestamp).limit(limit).all()
 
     return result
 

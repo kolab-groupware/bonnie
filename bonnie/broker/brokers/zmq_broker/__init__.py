@@ -315,6 +315,14 @@ class ZMQBroker(object):
                 job_type = 'collector'
             )
 
+    def _handle_wcr_PUSHBACK(self, router, identity, message):
+        log.debug("Handing PUSHBACK for identity %s (message: %r)" % (identity, message), level=8)
+        job_uuid = message[0]
+        job.update(
+                job_uuid,
+                state = b'PENDING'
+            )
+
     def _handle_wcr_STATE(self, router, identity, message):
         log.debug("Handing STATE for identity %s (message: %r)" % (identity, message), level=8)
         state = message[0]
