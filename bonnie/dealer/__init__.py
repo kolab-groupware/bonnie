@@ -74,8 +74,9 @@ class BonnieDealer(object):
     def run(self, notification):
         if self.accept_notification(notification):
             output_modules = conf.get('dealer', 'output_modules')
+            output_modules = [x.strip() for x in output_modules.split(',')]
             for _output in self.output_modules.keys():
-                if _output.name() == output_modules:
+                if _output.name() in output_modules:
                     _output.run(notification)
         else:
             log.info("Ignoring notification %s", notification)
