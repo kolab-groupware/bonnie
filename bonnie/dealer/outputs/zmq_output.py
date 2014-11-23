@@ -62,8 +62,10 @@ class ZMQOutput(object):
     def stop(self, message, *args, **kw):
         cmd = message[0]
 
-        if not cmd == b'ACL':
+        if not cmd == b'ACK':
             log.error("Unknown cmd %s" % (cmd))
+
+        ioloop.IOLoop.instance().stop()
 
         self.dealer.close()
         self.context.term()
