@@ -79,3 +79,5 @@ class BonnieDealer(object):
                     _output.run(notification)
         else:
             log.info("Ignoring notification %s", notification)
+
+        log.debug(_("Done dealing notification"), level=1)

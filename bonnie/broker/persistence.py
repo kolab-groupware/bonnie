@@ -119,10 +119,10 @@ def List(name, _type):
     return lst.items
 
 
-def syncronize():
+def synchronize():
     """
         Synchronize to persistent storage
     """
     if len(session.new) > 0 or len(session.dirty) > 0 or len(session.deleted) > 0:
-        log.debug("session.commit(); new=%r; dirty=%r; deleted=%r" % (session.new, session.dirty, session.deleted), level=9)
+        log.debug("session.commit(); new=%d; dirty=%d; deleted=%d" % (len(session.new), len(session.dirty), len(session.deleted)), level=1)
         session.commit()

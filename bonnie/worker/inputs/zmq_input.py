@@ -27,9 +27,11 @@
 """
 
 import os
+from multiprocessing import Process
 import socket
 import time
 import zmq
+from zmq.eventloop import ioloop, zmqstream
 
 import bonnie
 conf = bonnie.getConf()
@@ -44,126 +46,166 @@ class ZMQInput(object):
         self.lastping = 0
         self.report_timestamp = 0
 
+        self.identity = u"Worker-%s-%d" % (socket.getfqdn(),os.getpid())
+
     def name(self):
         return 'zmq_input'
+
+    def cb_worker(self, message, *args, **kw):
+        print "Worker:", message
+
+    def cb_worker_controller(self, message, *args, **kw):
+        print "Worker Controller:", message
 
     def register(self, *args, **kw):
         pass
 
     def report_state(self):
         log.debug("[%s] reporting state: %s" % (self.identity, self.state), level=8)
-        self.controller.send_multipart([b"STATE", self.state])
+        self.worker_controller.send_multipart([b"STATE", self.state])
         self.report_timestamp = time.time()
 
     def run(self, callback=None, report=None):
-        self.identity = u"Worker-%s-%d" % (socket.getfqdn(),os.getpid())
         log.info("[%s] starting", self.identity)
 
-        self.context = zmq.Context()
+        ioloop.install()
 
-        zmq_controller_address = conf.get('worker', 'zmq_controller_address')
+        Process(
+                target=self.run_worker,
+                args=(self.cb_worker,)
+            ).start()
 
-        if zmq_controller_address == None:
-            zmq_controller_address = "tcp://localhost:5572"
+        #Process(
+                #target=self.run_worker_controller,
+                #args=(self.cb_worker_controller,)
+            #).start()
 
-        self.controller = self.context.socket(zmq.DEALER)
-        self.controller.identity = (self.identity).encode('ascii')
-        self.controller.connect(zmq_controller_address)
+        #self.run_worker(self.cb_worker)
+        self.run_worker_controller(self.cb_worker_controller)
+
+        while True:
+            now = time.time()
+
+            if self.report_timestamp < (now - 60):
+                self.report_state()
+
+            time.sleep(10)
+
+    def run_worker(self, callback, *args, **kw):
+        log.info("[%s] worker starting", self.identity)
+
+        context = zmq.Context()
 
         zmq_worker_router_address = conf.get('worker', 'zmq_worker_router_address')
 
         if zmq_worker_router_address == None:
             zmq_worker_router_address = "tcp://localhost:5573"
 
-        self.worker = self.context.socket(zmq.DEALER)
+        self.worker = context.socket(zmq.DEALER)
         self.worker.identity = (self.identity).encode('ascii')
         self.worker.connect(zmq_worker_router_address)
 
-        self.poller = zmq.Poller()
-        self.poller.register(self.controller, zmq.POLLIN)
-        self.poller.register(self.worker, zmq.POLLIN)
+        worker_stream = zmqstream.ZMQStream(self.worker)
+        worker_stream.on_recv(callback)
 
-        self.running = True
-        self.lastping = time.time()
-        self.report_state()
+        ioloop.IOLoop.instance().start()
 
-        while self.running:
-            try:
-                sockets = dict(self.poller.poll(1000))
-            except KeyboardInterrupt, e:
-                log.info("zmq.Poller KeyboardInterrupt")
-                break
-            except Exception, e:
-                log.error("zmq.Poller error: %r", e)
-                sockets = dict()
+    def run_worker_controller(self, callback, *args, **kw):
+        log.info("[%s] worker controller starting", self.identity)
 
-            now = time.time()
+        context = zmq.Context()
 
-            if self.report_timestamp < (now - 60):
-                self.report_state()
+        zmq_controller_address = conf.get('worker', 'zmq_controller_address')
 
-            if self.controller in sockets:
-                if sockets[self.controller] == zmq.POLLIN:
-                    _message = self.controller.recv_multipart()
-                    log.debug("[%s] Controller message: %r" % (self.identity, _message), level=9)
+        if zmq_controller_address == None:
+            zmq_controller_address = "tcp://localhost:5572"
 
-                    if _message[0] == b"STATE":
-                        self.report_state()
+        self.worker_controller = context.socket(zmq.DEALER)
+        self.worker_controller.identity = (self.identity).encode('ascii')
+        self.worker_controller.connect(zmq_controller_address)
 
-                    if _message[0] == b"TAKE":
-                        if not self.state == b"READY":
-                            self.report_state()
+        worker_controller_stream = zmqstream.ZMQStream(self.worker_controller)
+        worker_controller_stream.on_recv(callback)
 
-                        else:
-                            _job_id = _message[1]
-                            self.take_job(_job_id)
+        ioloop.IOLoop.instance().start()
 
-            if self.worker in sockets:
-                if sockets[self.worker] == zmq.POLLIN:
-                    _message = self.worker.recv_multipart()
-                    log.debug("[%s] Worker message: %r" % (self.identity, _message), level=9)
+        #while self.running:
+            #try:
+                #sockets = dict(self.poller.poll(1000))
+            #except KeyboardInterrupt, e:
+                #log.info("zmq.Poller KeyboardInterrupt")
+                #break
+            #except Exception, e:
+                #log.error("zmq.Poller error: %r", e)
+                #sockets = dict()
 
-                    if _message[0] == "JOB":
-                        _job_uuid = _message[1]
+            #now = time.time()
 
-                        # TODO: Sanity checking
-                        #if _message[1] == self.job_id:
-                        if not callback == None:
-                            (notification, jobs) = callback(_message[2])
-                        else:
-                            jobs = []
+            #if self.report_timestamp < (now - 60):
+                #self.report_state()
 
-                        if len(jobs) == 0:
-                            self.controller.send_multipart([b"DONE", _job_uuid])
-                        else:
-                            log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
+            #if self.worker_controller in sockets:
+                #if sockets[self.worker_controller] == zmq.POLLIN:
+                    #_message = self.worker_controller.recv_multipart()
+                    #log.debug("[%s] Controller message: %r" % (self.identity, _message), level=9)
 
-                        for job in jobs:
-                            self.controller.send_multipart([job, _job_uuid])
+                    #if _message[0] == b"STATE":
+                        #self.report_state()
 
-                        self.set_state_ready()
+                    #if _message[0] == b"TAKE":
+                        #if not self.state == b"READY":
+                            #self.report_state()
 
-            if report is not None and self.lastping < (now - 60):
-                report()
-                self.lastping = now
+                        #else:
+                            #_job_id = _message[1]
+                            #self.take_job(_job_id)
 
-        log.info("[%s] shutting down", self.identity)
-        self.worker.close()
+            #if self.worker in sockets:
+                #if sockets[self.worker] == zmq.POLLIN:
+                    #_message = self.worker.recv_multipart()
+                    #log.debug("[%s] Worker message: %r" % (self.identity, _message), level=9)
 
-    def set_state_busy(self):
-        log.debug("[%s] Set state to BUSY" % (self.identity), level=9)
-        self.controller.send_multipart([b"STATE", b"BUSY", b"%s" % (self.job_id)])
-        self.state = b"BUSY"
+                    #if _message[0] == "JOB":
+                        #_job_uuid = _message[1]
 
-    def set_state_ready(self):
-        log.debug("[%s] Set state to READY" % (self.identity), level=9)
-        self.controller.send_multipart([b"STATE", b"READY"])
-        self.state = b"READY"
-        self.job_id = None
+                        ## TODO: Sanity checking
+                        ##if _message[1] == self.job_id:
+                        #if not callback == None:
+                            #(notification, jobs) = callback(_message[2])
+                        #else:
+                            #jobs = []
 
-    def take_job(self, _job_id):
-        log.debug("[%s] Accept job %s" % (self.identity, _job_id), level=9)
-        self.set_state_busy()
-        self.worker.send_multipart([b"GET", _job_id])
-        self.job_id = _job_id
+                        #if len(jobs) == 0:
+                            #self.worker_controller.send_multipart([b"DONE", _job_uuid])
+                        #else:
+                            #log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
+
+                        #for job in jobs:
+                            #self.worker_controller.send_multipart([job, _job_uuid])
+
+                        #self.set_state_ready()
+
+            #if report is not None and self.lastping < (now - 60):
+                #report()
+                #self.lastping = now
+
+        #log.info("[%s] shutting down", self.identity)
+        #self.worker.close()
+
+    #def set_state_busy(self):
+        #log.debug("[%s] Set state to BUSY" % (self.identity), level=9)
+        #self.worker_controller.send_multipart([b"STATE", b"BUSY", b"%s" % (self.job_id)])
+        #self.state = b"BUSY"
+
+    #def set_state_ready(self):
+        #log.debug("[%s] Set state to READY" % (self.identity), level=9)
+        #self.worker_controller.send_multipart([b"STATE", b"READY"])
+        #self.state = b"READY"
+        #self.job_id = None
+
+    #def take_job(self, _job_id):
+        #log.debug("[%s] Accept job %s" % (self.identity, _job_id), level=9)
+        #self.set_state_busy()
+        #self.worker.send_multipart([b"GET", _job_id])
+        #self.job_id = _job_id
 

@@ -172,5 +172,4 @@ class Logger(logging.Logger):
             # TODO: Not the way it's supposed to work!
             self.log(logging.DEBUG, '[%d]: %s' % (os.getpid(),msg))
 
-
 logging.setLoggerClass(Logger)
