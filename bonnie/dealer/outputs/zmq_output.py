@@ -23,6 +23,7 @@
 import os
 import socket
 import zmq
+from zmq.eventloop import ioloop, zmqstream
 
 import bonnie
 conf = bonnie.getConf()
@@ -31,6 +32,8 @@ log = bonnie.getLogger('bonnie.dealer.ZMQOutput')
 class ZMQOutput(object):
     def __init__(self, *args, **kw):
         self.context = zmq.Context()
+
+        ioloop.install()
 
         zmq_broker_address = conf.get('dealer', 'zmq_broker_address')
 
@@ -41,8 +44,8 @@ class ZMQOutput(object):
         self.dealer.identity = (u"Dealer-%s-%s" % (socket.getfqdn(), os.getpid())).encode('ascii')
         self.dealer.connect(zmq_broker_address)
 
-        self.poller = zmq.Poller()
-        self.poller.register(self.dealer, zmq.POLLIN)
+        self.dealer_stream = zmqstream.ZMQStream(self.dealer)
+        self.dealer_stream.on_recv(self.stop)
 
     def name(self):
         return 'zmq_output'
@@ -54,15 +57,13 @@ class ZMQOutput(object):
         log.debug("[%s] Notification received: %r" % (self.dealer.identity, notification), level=9)
         self.dealer.send(notification)
 
-        received_reply = False
-        while not received_reply:
-            sockets = dict(self.poller.poll(1000))
-            if self.dealer in sockets:
-                if sockets[self.dealer] == zmq.POLLIN:
-                    _reply = self.dealer.recv_multipart()
-                    log.debug("[%s] Reply: %r" % (self.dealer.identity, _reply), level=9)
-                    if _reply[0] == b"ACK":
-                        received_reply = True
+        ioloop.IOLoop.instance().start()
+
+    def stop(self, message, *args, **kw):
+        cmd = message[0]
+
+        if not cmd == b'ACL':
+            log.error("Unknown cmd %s" % (cmd))
 
         self.dealer.close()
         self.context.term()
