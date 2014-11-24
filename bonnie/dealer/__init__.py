@@ -46,7 +46,7 @@ class BonnieDealer(object):
         # ignore globally excluded events
         exclude_events = conf.get('dealer', 'input_exclude_events', None)
         if not exclude_events == None:
-            exclude_events = exclude_events.split(',')
+            exclude_events = [x.strip() for x in exclude_events.split(',')]
         else:
             exclude_events = []
 
@@ -55,13 +55,13 @@ class BonnieDealer(object):
 
         blacklist_events = conf.get('dealer', 'blacklist_events', None)
         if not blacklist_events == None:
-            blacklist_events = blacklist_events.split(',')
+            blacklist_events = [x.strip() for x in blacklist_events.split(',')]
         else:
             blacklist_events = []
 
         blacklist_users  = conf.get('dealer', 'blacklist_users', None)
         if not blacklist_users == None:
-            blacklist_users = blacklist_users.split(',')
+            blacklist_users = [x.strip() for x in blacklist_users.split(',')]
         else:
             blacklist_users = []
 
@@ -81,4 +81,4 @@ class BonnieDealer(object):
         else:
             log.info("Ignoring notification %s", notification)
 
-        log.debug(_("Done dealing notification"), level=1)
+        log.debug("Done dealing notification", level=1)

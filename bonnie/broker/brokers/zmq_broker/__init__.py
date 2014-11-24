@@ -47,13 +47,12 @@ class ZMQBroker(object):
         """
         callback({ '_all': self.run })
 
-    def cb_collector_router_recv(self, message, *args, **kw):
+    def cb_collector_router_on_recv(self, message, *args, **kw):
         """
             Callback on receiving messages on the collector router
             stream.
         """
         log.debug("Collector router: %r" % (message), level=8)
-        print "Collector router: %r" % (message)
 
         identity = message[0]
         cmd = message[1]
@@ -62,28 +61,26 @@ class ZMQBroker(object):
             state = message[2]
             collector.set_state(identity, state)
 
-    def cb_dealer_router_recv(self, message, *args, **kw):
+    def cb_dealer_router_on_recv_stream(self, stream, message, *args, **kw):
         """
             Callback on receiving messages on the dealer router
             stream.
         """
         log.debug("Dealer router: %r" % (message), level=8)
-        print "Dealer router: %r" % (message)
 
         dealer_identity = message[0]
         notification = message[1]
 
+        stream.send_multipart([dealer_identity, b'ACK' ])
+
         job.add(dealer_identity, notification)
 
-        self.dealer_router.send_multipart([dealer_identity, b'ACK' ])
-
-    def cb_worker_controller_router_recv(self, message, *args, **kw):
+    def cb_worker_controller_router_on_recv(self, message, *args, **kw):
         """
             Callback on receiving messages on the worker controller
             router stream.
         """
         log.debug("Worker controller: %r" % (message), level=8)
-        print "Worker controller: %r" % (message)
 
         worker_identity = message[0]
         cmd = message[1]
@@ -99,13 +96,12 @@ class ZMQBroker(object):
         else:
             log.error("Worker controller unknown cmd: %s" % (cmd))
 
-    def cb_worker_router_recv(self, message, *args, **kw):
+    def cb_worker_router_on_recv(self, message, *args, **kw):
         """
             Callback on receiving messages on the worker router
             stream.
         """
         log.debug("Worker router: %r" % (message), level=8)
-        print "Worker router: %r" % (message)
 
         worker_identity = message[0]
         cmd = message[1]
@@ -119,25 +115,26 @@ class ZMQBroker(object):
     def run(self):
         log.info("Starting the collector router...")
         self.collector_router = CollectorRouter(
-                callback=self.cb_collector_router_recv
+                on_recv = self.cb_collector_router_on_recv
             )
         self.collector_router.start()
 
         log.info("Starting the dealer router...")
         self.dealer_router = DealerRouter(
-                callback=self.cb_dealer_router_recv
+                on_recv_stream = self.cb_dealer_router_on_recv_stream
             )
+
         self.dealer_router.start()
 
         log.info("Starting the worker router...")
         self.worker_router = WorkerRouter(
-                callback=self.cb_worker_router_recv
+                on_recv = self.cb_worker_router_on_recv
             )
         self.worker_router.start()
 
         log.info("Starting the worker controller router...")
         self.worker_controller_router = WorkerControllerRouter(
-                callback=self.cb_worker_controller_router_recv
+                on_recv = self.cb_worker_controller_router_on_recv
             )
         self.worker_controller_router.start()
 

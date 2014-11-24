@@ -22,6 +22,8 @@
 import datetime
 import time
 
+from sqlalchemy.exc import IntegrityError
+
 from bonnie.broker.state import init_db, Job, Worker
 
 def add(dealer, notification, job_type='worker'):
@@ -29,8 +31,11 @@ def add(dealer, notification, job_type='worker'):
         Add a new job.
     """
     db = init_db('jobs')
-    db.add(Job(dealer, notification, job_type))
-    db.commit()
+    try:
+        db.add(Job(dealer, notification, job_type))
+        db.commit()
+    except IntegrityError, errmsg:
+        db.rollback()
 
 def count_by_state(state):
     db = init_db('jobs')

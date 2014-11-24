@@ -16,61 +16,51 @@ log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 
 class Router(multiprocessing.Process):
     def __init__(self, *args, **kw):
-        log.info("Process %s initializing..." % (multiprocessing.current_process().name))
+        self.context = None
+        self.loop = None
 
-        if not kw.has_key('callback'):
-            raise ArgumentError, "No callback specified"
+        self.callbacks = {}
 
-        if not callable(kw['callback']):
-            raise ArgumentError, "Callback not callable"
+        if kw.has_key('on_recv'):
+            self.callbacks['on_recv'] = kw['on_recv']
+            del kw['on_recv']
 
-        #self.zmq_callback = kw['callback']
-        del kw['callback']
+        if kw.has_key('on_send'):
+            self.callbacks['on_send'] = kw['on_send']
+            del kw['on_send']
 
-        self.target = self.start_router
+        if kw.has_key('on_recv_stream'):
+            self.callbacks['on_recv_stream'] = kw['on_recv_stream']
+            del kw['on_recv_stream']
 
-        context = zmq.Context()
-
-        self.zmq_router = context.socket(zmq.ROUTER)
-        self.zmq_router.bind(self.bind_address)
-
-        zmq_router_stream = zmqstream.ZMQStream(self.zmq_router, ioloop.IOLoop.instance())
-        zmq_router_stream.on_recv(self.zmq_callback)
-        zmq_router_stream.on_send(self.zmq_callback)
-        zmq_router_stream.on_recv_stream(self.zmq_callback)
-        zmq_router_stream.on_send_stream(self.zmq_callback)
+        if kw.has_key('on_send_stream'):
+            self.callbacks['on_send_stream'] = kw['on_send_stream']
+            del kw['on_send_stream']
 
         super(Router, self).__init__(*args, **kw)
 
-        log.info("Process %s initialized" % (multiprocessing.current_process().name))
-
-    def send_multipart(self, message):
-        """
-            Proxy callable for sub-classes.
-
-            Enables the main broker thread to trigger the message bus in
-            to dispatching a message.
-        """
-        log.info("%s sending message: %r" % (multiprocessing.current_process().name, message))
-
-        self.zmq_router.send_multipart(message)
-
     def run(self, *args, **kw):
-        log.info("Process %s running..." % (multiprocessing.current_process().name))
-        self.zmq_callback([multiprocessing.current_process().name, "Running!", "extra"])
-        super(Router, self).run(*args, **kw)
+        self.router = zmq.Context().socket(zmq.ROUTER)
+        self.router.bind(self.bind_address)
 
-    def start(self, *args, **kw):
-        log.info("Process %s starting..." % (multiprocessing.current_process().name))
-        super(Router, self).start(*args, **kw)
+        self.stream = zmqstream.ZMQStream(self.router)
 
-    def start_router(self):
-        log.info("Starting %s" % (multiprocessing.current_process().name))
+        if self.callbacks.has_key('on_recv'):
+            self.stream.on_recv(self.callbacks['on_recv'])
+
+        if self.callbacks.has_key('on_recv_stream'):
+            self.stream.on_recv_stream(self.callbacks['on_recv_stream'])
+
+        if self.callbacks.has_key('on_send'):
+            self.stream.on_send(self.callbacks['on_send'])
+
+        if self.callbacks.has_key('on_send_stream'):
+            self.stream.on_send_stream(self.callbacks['on_send_stream'])
 
         ioloop.IOLoop.instance().start()
 
-    def zmq_callback(self, *args, **kw):
-        log.info("Router.zmq_callback called: args: %r, kw: %r" % (args, kw))
+    def send_multipart(self, message):
+        self.router.send_multipart(message)
 
 class CollectorRouter(Router):
     def __init__(self, *args, **kw):
