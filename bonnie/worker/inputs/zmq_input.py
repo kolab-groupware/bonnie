@@ -40,7 +40,7 @@ class ZMQInput(object):
 
     def __init__(self, *args, **kw):
         self.state = b"READY"
-        self.job_id = None
+        self.job_uuid = None
         self.lastping = 0
         self.report_timestamp = 0
 
@@ -52,7 +52,12 @@ class ZMQInput(object):
 
     def report_state(self):
         log.debug("[%s] reporting state: %s" % (self.identity, self.state), level=8)
-        self.controller.send_multipart([b"STATE", self.state])
+        message = [b"STATE", self.state]
+
+        if not self.job_uuid == None and self.state == b'BUSY':
+            message.append(self.job_uuid)
+
+        self.controller.send_multipart(message)
         self.report_timestamp = time.time()
 
     def run(self, callback=None, report=None):
@@ -89,7 +94,7 @@ class ZMQInput(object):
 
         while self.running:
             try:
-                sockets = dict(self.poller.poll(1000))
+                sockets = dict(self.poller.poll(1))
             except KeyboardInterrupt, e:
                 log.info("zmq.Poller KeyboardInterrupt")
                 break
@@ -115,8 +120,8 @@ class ZMQInput(object):
                             self.report_state()
 
                         else:
-                            _job_id = _message[1]
-                            self.take_job(_job_id)
+                            self.job_uuid = _message[1]
+                            self.take_job(self.job_uuid)
 
             if self.worker in sockets:
                 if sockets[self.worker] == zmq.POLLIN:
@@ -124,22 +129,23 @@ class ZMQInput(object):
                     log.debug("[%s] Worker message: %r" % (self.identity, _message), level=9)
 
                     if _message[0] == "JOB":
-                        _job_uuid = _message[1]
+                        self.job_uuid = _message[1]
 
                         # TODO: Sanity checking
-                        #if _message[1] == self.job_id:
+                        #if _message[1] == self.job_uuid:
+                        #jobs = []
                         if not callback == None:
                             (notification, jobs) = callback(_message[2])
                         else:
                             jobs = []
 
                         if len(jobs) == 0:
-                            self.controller.send_multipart([b"DONE", _job_uuid])
+                            self.controller.send_multipart([b"DONE", self.job_uuid])
                         else:
                             log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
 
                         for job in jobs:
-                            self.controller.send_multipart([job, _job_uuid])
+                            self.controller.send_multipart([job, self.job_uuid])
 
                         self.set_state_ready()
 
@@ -152,18 +158,18 @@ class ZMQInput(object):
 
     def set_state_busy(self):
         log.debug("[%s] Set state to BUSY" % (self.identity), level=9)
-        self.controller.send_multipart([b"STATE", b"BUSY", b"%s" % (self.job_id)])
+        self.controller.send_multipart([b"STATE", b"BUSY", b"%s" % (self.job_uuid)])
         self.state = b"BUSY"
 
     def set_state_ready(self):
         log.debug("[%s] Set state to READY" % (self.identity), level=9)
         self.controller.send_multipart([b"STATE", b"READY"])
         self.state = b"READY"
-        self.job_id = None
+        self.job_uuid = None
 
     def take_job(self, _job_id):
         log.debug("[%s] Accept job %s" % (self.identity, _job_id), level=9)
         self.set_state_busy()
         self.worker.send_multipart([b"GET", _job_id])
-        self.job_id = _job_id
+        self.job_uuid = _job_id
 
