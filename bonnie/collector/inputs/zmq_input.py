@@ -79,7 +79,7 @@ class ZMQInput(object):
 
         while self.running:
             try:
-                sockets = dict(self.poller.poll(1000))
+                sockets = dict(self.poller.poll(1))
             except KeyboardInterrupt, e:
                 log.info("zmq.Poller KeyboardInterrupt")
                 break

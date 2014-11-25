@@ -40,7 +40,7 @@ class LDAPDataHandler(object):
             self.pykolab_conf.finalize_conf(fatal=False)
 
         self.ldap = Auth()
-        self.connections = 0
+        self.ldap.connect()
 
     def register(self, callback):
         interests = {
@@ -54,10 +54,7 @@ class LDAPDataHandler(object):
         log.debug("GETUSERDATA for %r" % (notification), level=9)
 
         if notification.has_key('user'):
-            self.connections += 1
-
             try:
-                self.ldap.connect()
                 user_dn = self.ldap.find_user_dn(notification['user'], True)
                 log.debug("User DN for %s: %r" % (notification['user'], user_dn), level=8)
             except Exception, e:
@@ -77,10 +74,5 @@ class LDAPDataHandler(object):
                 user_rec = None
 
             notification['user_data'] = user_rec
-
-            self.connections -= 1
-
-            if self.connections == 0:
-                self.ldap.disconnect()
 
         return json.dumps(notification)
