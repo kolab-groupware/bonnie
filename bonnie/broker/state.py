@@ -31,6 +31,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import MetaData
 from sqlalchemy import String
+from sqlalchemy import Table
 from sqlalchemy import Text
 
 from sqlalchemy import create_engine
@@ -55,6 +56,13 @@ DeclarativeBase = declarative_base()
 
 db = None
 
+collector_interest_table = Table(
+        'collector_interest',
+        DeclarativeBase.metadata,
+        Column('collector_id', Integer, ForeignKey('collector.id')),
+        Column('interest_id', Integer, ForeignKey('interest.id'))
+    )
+
 ##
 ## Classes
 ##
@@ -66,11 +74,24 @@ class Collector(DeclarativeBase):
     identity = Column(String(128))
     state = Column(String(16))
     job = Column(Integer, ForeignKey('job.id'))
+    interests = relationship(
+            "Interest",
+            secondary=collector_interest_table
+        )
 
-    def __init__(self, identity, state):
+    def __init__(self, identity, state = b'READY'):
         DeclarativeBase.__init__(self)
         self.identity = identity
         self.state = state
+
+class Interest(DeclarativeBase):
+    __tablename__ = 'interest'
+
+    id = Column(Integer, primary_key=True)
+    cmd = Column(String(16), nullable=False)
+
+    def __init__(self, cmd):
+        self.cmd = cmd
 
 class Job(DeclarativeBase):
     __tablename__ = 'job'
@@ -82,6 +103,7 @@ class Job(DeclarativeBase):
     notification = Column(Text)
     job_type = Column(String(16), default='worker')
     state = Column(String(16))
+    cmd = Column(String(16))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow())
 
     def __init__(self, dealer, notification, job_type='worker'):
@@ -93,6 +115,7 @@ class Job(DeclarativeBase):
         self.state = b'PENDING'
         self.job_type = job_type
         self.timestamp = datetime.datetime.utcnow()
+        self.cmd = None
 
 class Worker(DeclarativeBase):
     __tablename__ = 'worker'

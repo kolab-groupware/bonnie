@@ -19,47 +19,135 @@
 # USA.
 #
 
-import hashlib
+import datetime
 import time
-from bonnie.broker.persistence import db, PersistentBase
 
-class Job(PersistentBase):
-    __tablename__ = 'jobs'
-    # use binary types because ZMQ requires binary strings
-    uuid = db.Column(db.LargeBinary(128), primary_key=True)
-    type = db.Column(db.String(16))
-    state = db.Column(db.String(16))
-    timestamp = db.Column(db.Float)
-    notification = db.Column(db.LargeBinary)
-    worker_id = db.Column(db.String(64))
-    client_id = db.Column(db.String(64))
-    collector_id = db.Column(db.LargeBinary(64))
-    command = db.Column(db.LargeBinary(32))
+from sqlalchemy.exc import IntegrityError
 
-    def __init__(self, state=None, notification=None, worker_id=None, client_id=None, collector_id=None):
-        self.uuid = "%s.%s" % (hashlib.sha224(notification).hexdigest(), time.time())
-        self.state = state
-        self.notification = notification
-        self.worker_id = worker_id
-        self.client_id = client_id
-        self.collector_id = collector_id
-        self.timestamp = time.time()
-        self.command = None
-        self.retries = 0
+import bonnie
+conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 
-        if self.client_id == None:
-            if self.collector_id == None:
-                self.type = None
-            else:
-                self.type = 'Collector'
-        else:
-            self.type = 'Dealer'
+from bonnie.broker.state import init_db, Job, Worker
 
-    def set_status(self, state):
-        self.state = state
+def add(dealer, notification, job_type='worker'):
+    """
+        Add a new job.
+    """
+    db = init_db('jobs')
+    try:
+        db.add(Job(dealer, notification, job_type))
+        db.commit()
+    except IntegrityError, errmsg:
+        db.rollback()
 
-    def set_worker(self, worker_id):
-        self.worker_id = worker_id
+def count():
+    db = init_db('jobs')
+    result = db.query(Job).count()
+    return result
 
-    def set_command(self, cmd):
-        self.command = cmd
+def count_by_state(state):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(state=state).count()
+    return result
+
+def count_by_type(job_type):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(job_type=job_type).all()
+    return result
+
+def select(job_uuid):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(uuid=job_uuid).first()
+    return result
+
+def select_all():
+    db = init_db('jobs')
+    result = db.query(Job).all()
+    return result
+
+def select_by_state(state):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(state=state).all()
+    return result
+
+def select_by_type(job_type):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(job_type=job_type).all()
+    return result
+
+def select_by_type_and_state(job_type, state, limit=-1):
+    db = init_db('jobs')
+
+    if limit == -1:
+        result = db.query(Job).filter_by(job_type=job_type, state=state).all()
+    else:
+        result = db.query(Job).filter_by(job_type=job_type, state=state).limit(limit).all()
+
+    return result
+
+def select_for_collector(identity):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
+    if not result == None:
+        result.state = b'ALLOC'
+        result.timestamp = datetime.datetime.utcnow()
+    return result
+
+def set_state(uuid, state):
+    db = init_db('jobs')
+    for job in db.query(Job).filter_by(uuid=uuid).all():
+        job.state = state
+        job.timestamp = datetime.datetime.utcnow()
+    db.commit()
+
+def set_job_type(uuid, job_type):
+    db = init_db('jobs')
+    job = db.query(Job).filter_by(uuid=uuid).first()
+    job.job_type = job_type
+    job.timestamp = datetime.datetime.utcnow()
+    db.commit()
+
+def update(job_uuid, **kw):
+    db = init_db('jobs')
+    job = db.query(Job).filter_by(uuid=job_uuid).first()
+
+    for attr, value in kw.iteritems():
+        setattr(job, attr, value)
+
+    job.timestamp = datetime.datetime.utcnow()
+
+    db.commit()
+
+def expire():
+    """
+        Unlock jobs that have been allocated to some worker way too long
+        ago.
+    """
+    db = init_db('jobs')
+
+    for job in db.query(Job).filter(Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 120)), Job.state == b'DONE').all():
+        log.info("Purging job %s" % (job.uuid))
+        db.delete(job)
+
+    db.commit()
+
+def unlock():
+    """
+        Unlock jobs that have been allocated to some worker way too long
+        ago.
+    """
+    db = init_db('jobs')
+
+    for job in db.query(Job).filter(
+                Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 120)),
+                Job.state == b'ALLOC'
+            ).all():
+
+        log.info("Unlocking %s job %s" % (job.job_type, job.uuid))
+        job.state = b'PENDING'
+
+        for worker in db.query(Worker).filter_by(job=job.id).all():
+            worker.job = None
+
+    db.commit()
