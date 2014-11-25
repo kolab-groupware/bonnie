@@ -34,27 +34,28 @@ class ElasticSearchOutput(object):
             Convert the given event notification record into a valid log entry
         """
         keymap = {
-            'timestamp':    None,
-            'clientIP':     'client_ip',
-            'clientPort':   None,
-            'serverPort':   None,
-            'serverDomain': 'domain',
-            'aclRights':    'acl_rights',
-            'aclSubject':   'acl_subject',
-            'mailboxID':    'mailbox_id',
-            'messageSize':  'message_size',
-            'messageHeaders': None,
-            'messageContent': None,
-            'bodyStructure':  None,
-            'metadata':       None,
-            'acl':            None,
-            'flagNames':    'flag_names',
-            'diskUsed':     'disk_used',
-            'vnd.cmu.oldUidset': 'olduidset',
-            'vnd.cmu.sessionId': 'session_id',
-            'vnd.cmu.midset': 'message_id',
-            'vnd.cmu.unseenMessages': 'unseen_messages',
-        }
+                'timestamp':                None,
+                'clientIP':                 'client_ip',
+                'clientPort':               None,
+                'serverPort':               None,
+                'serverDomain':             'domain',
+                'aclRights':                'acl_rights',
+                'aclSubject':               'acl_subject',
+                'mailboxID':                'mailbox_id',
+                'messageSize':              'message_size',
+                'messageHeaders':           None,
+                'messageContent':           None,
+                'bodyStructure':            None,
+                'metadata':                 None,
+                'acl':                      None,
+                'flagNames':                'flag_names',
+                'diskUsed':                 'disk_used',
+                'vnd.cmu.oldUidset':        'olduidset',
+                'vnd.cmu.sessionId':        'session_id',
+                'vnd.cmu.midset':           'message_id',
+                'vnd.cmu.unseenMessages':   'unseen_messages',
+            }
+
         log = { '@version': bonnie.API_VERSION }
         for key,val in notification.iteritems():
             newkey = keymap[key] if keymap.has_key(key) else key
