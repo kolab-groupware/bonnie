@@ -239,7 +239,11 @@ class ZMQBroker(object):
                 cmd = None
             )
 
-        collector.set_state(identity, b'READY')
+        collector.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
 
     def _handle_cr_STATE(self, router, identity, message):
         """
