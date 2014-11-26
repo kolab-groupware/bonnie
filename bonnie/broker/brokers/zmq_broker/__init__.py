@@ -195,9 +195,7 @@ class ZMQBroker(object):
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
                 pending=%(jcp)d, alloc=%(jca)d.
-    Took:       seconds=%(duration)s.""" % stats
-
-                log.info(info)
+    Took:       seconds=%(duration)s.""" % stats)
 
                 last_state = time.time()
 
