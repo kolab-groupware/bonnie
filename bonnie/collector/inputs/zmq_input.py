@@ -108,6 +108,7 @@ class ZMQInput(object):
                             if not callback == None:
                                 result = callback(_message[0], _notification)
 
+                            self.report_timestamp = time.time()
                             self.collector.send_multipart([b"DONE", _job_uuid, result])
 
         log.info("[%s] shutting down", self.identity)
