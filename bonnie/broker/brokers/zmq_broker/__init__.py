@@ -146,6 +146,7 @@ class ZMQBroker(object):
                         callback(router, result)
 
             if last_run < (time.time() - 1):
+                stats_start = time.time()
                 jcp = job.count_by_type_and_state('collector', b'PENDING')
                 jwp = job.count_by_type_and_state('worker', b'PENDING')
                 jca = job.count_by_type_and_state('collector', b'ALLOC')
@@ -166,13 +167,17 @@ class ZMQBroker(object):
                         'wr': worker.count_by_state(b'READY'),
                         'ws': worker.count_by_state(b'STALE'),
                     }
+                stats_end = time.time()
+
+                stats['duration'] = stats_end - stats_start
 
                 log.info("""
     Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d.
     Workers:    ready=%(wr)d, busy=%(wb)d, stale=%(ws)d,
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
-                pending=%(jcp)d, alloc=%(jca)d.""" % stats)
+                pending=%(jcp)d, alloc=%(jca)d.
+    Took:       seconds=%(duration)d.""" % stats)
 
                 last_run = time.time()
 
