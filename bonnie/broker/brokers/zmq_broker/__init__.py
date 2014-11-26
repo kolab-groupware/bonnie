@@ -134,7 +134,8 @@ class ZMQBroker(object):
             )
 
         self.running = True
-        last_run = time.time()
+        last_expire = time.time()
+        last_state = time.time()
         poller_timeout = int(conf.get('broker', 'zmq_poller_timeout', 100))
 
         while self.running:
@@ -156,7 +157,20 @@ class ZMQBroker(object):
                         result = getattr(router, '%s' % callforward)()
                         callback(router, result)
 
-            if last_run < (time.time() - 10):
+            for _collector in collector.select_by_state(b'READY'):
+                self._send_collector_job(_collector.identity)
+
+            for _worker in worker.select_by_state(b'READY'):
+                self._send_worker_job(_worker.identity)
+
+            if last_expire < (time.time() - 30):
+                collector.expire()
+                worker.expire()
+                job.unlock()
+                job.expire()
+                last_expire = time.time()
+
+            if last_state < (time.time() - 10):
                 stats_start = time.time()
                 jcp = job.count_by_type_and_state('collector', b'PENDING')
                 jwp = job.count_by_type_and_state('worker', b'PENDING')
@@ -181,7 +195,7 @@ class ZMQBroker(object):
                     }
                 stats_end = time.time()
 
-                stats['duration'] = stats_end - stats_start
+                stats['duration'] = "%.4f" % (stats_end - stats_start)
 
                 log.info("""
     Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d,
@@ -190,19 +204,9 @@ class ZMQBroker(object):
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
                 pending=%(jcp)d, alloc=%(jca)d.
-    Took:       seconds=%(duration)d.""" % stats)
+    Took:       seconds=%(duration)s.""" % stats)
 
-                last_run = time.time()
-
-            for _collector in collector.select_by_state(b'READY'):
-                self._send_collector_job(_collector.identity)
-
-            for _worker in worker.select_by_state(b'READY'):
-                self._send_worker_job(_worker.identity)
-
-            worker.expire()
-            job.unlock()
-            job.expire()
+                last_state = time.time()
 
 
         log.info("Shutting down")
@@ -367,13 +371,13 @@ class ZMQBroker(object):
     def _handle_wcr_PUSHBACK(self, router, identity, message):
         log.debug("Handing PUSHBACK for identity %s (message: %r)" % (identity, message), level=8)
         job_uuid = message[0]
-        job_ = job.select(job_uuid)
+        _job = job.select(job_uuid)
 
-        if job_ is not None and job_.pushbacks < 5:
+        if _job is not None and _job.pushbacks < 5:
             job.update(
                     job_uuid,
                     state = b'PENDING',
-                    pushbacks = job_.pushbacks + 1
+                    pushbacks = _job.pushbacks + 1
                 )
         else:
             log.error("Job %s pushed back too many times" % (job_uuid))
@@ -490,6 +494,7 @@ class ZMQBroker(object):
             )
 
         log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+
         self.routers['collector']['router'].send_multipart(
                 [
                         (_job.collector).encode('ascii'),
@@ -511,7 +516,7 @@ class ZMQBroker(object):
                 job = _job.id
             )
 
-        log.debug("Sending %s to %s" % (_job.uuid, identity), level=6)
+        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
 
         self.routers['worker_controller']['router'].send_multipart(
                 [

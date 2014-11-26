@@ -19,9 +19,14 @@
 # USA.
 #
 
+import datetime
 import time
 
-from bonnie.broker.state import init_db, Collector, Interest
+import bonnie
+conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie.broker.ZMQBroker')
+
+from bonnie.broker.state import init_db, Collector, Job, Interest
 
 def add(identity, state = b'READY', interests = []):
     db = init_db('collectors')
@@ -71,6 +76,8 @@ def set_state(identity, state, interests = []):
         collector = db.query(Collector).filter_by(identity=identity).first()
     else:
         collector.state = state
+        collector.timestamp = datetime.datetime.utcnow()
+        db.commit()
 
     if state == b'READY':
         collector.job = None
@@ -96,3 +103,18 @@ def update(identity, **kw):
         setattr(collector, attr, value)
 
     db.commit()
+
+def expire():
+    db = init_db('collectors')
+
+    for collector in db.query(Collector).filter(Collector.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 90)), Collector.state != b'STALE').all():
+        log.debug("Marking collector %s as stale" % (collector.identity), level=7)
+        if not collector.job == None:
+            _job = db.query(Job).filter_by(id=collector.job).first()
+            if not _job == None:
+                _job.state = b'PENDING'
+                _job.timestamp = datetime.datetime.utcnow()
+
+        collector.state = b'STALE'
+        collector.timestamp = datetime.datetime.utcnow()
+        db.commit()

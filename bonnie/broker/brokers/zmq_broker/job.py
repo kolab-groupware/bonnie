@@ -28,7 +28,7 @@ import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 
-from bonnie.broker.state import init_db, Job, Worker
+from bonnie.broker.state import init_db, Collector, Job, Worker
 
 def add(dealer, notification, job_type='worker'):
     """
@@ -81,19 +81,28 @@ def select_by_type(job_type):
     result = db.query(Job).filter_by(job_type=job_type).all()
     return result
 
-def select_by_type_and_state(job_type, state, limit=-1):
-    db = init_db('jobs')
-
-    if limit == -1:
-        result = db.query(Job).filter_by(job_type=job_type, state=state).order_by(Job.timestamp).all()
-    else:
-        result = db.query(Job).filter_by(job_type=job_type, state=state).order_by(Job.timestamp).limit(limit).all()
-
-    return result
-
 def select_for_collector(identity):
     db = init_db('jobs')
-    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp).first()
+
+    collector = db.query(Collector).filter(Collector.identity==identity, Collector.job == None, Collector.state == b'READY').first()
+
+    if collector == None:
+        return
+
+    # This is influenced by .update(), which resets the .timestamp to
+    # .utcnow(), effectively pushing all updated jobs to the back of the
+    # queue.
+    #
+    # Practical result is a massive amount of metadata gathering
+    # followed by a sudden surge of jobs getting DONE.
+    #job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp).first()
+
+    # This would result in "most recent first, work your way backwards."
+    #job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp.desc()).first()
+
+    # This results in following the storage order and is by far the
+    # fastest methodology.
+    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
 
     if not job == None:
         job.state = b'ALLOC'
@@ -104,7 +113,26 @@ def select_for_collector(identity):
 
 def select_for_worker(identity):
     db = init_db('jobs')
-    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp).first()
+
+    worker = db.query(Worker).filter(Worker.identity == identity, Worker.job == None, Worker.state == b'READY').first()
+
+    if worker == None:
+        return
+
+    # This is influenced by .update(), which resets the .timestamp to
+    # .utcnow(), effectively pushing all updated jobs to the back of the
+    # queue.
+    #
+    # Practical result is a massive amount of metadata gathering
+    # followed by a sudden surge of jobs getting DONE.
+    #job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp).first()
+
+    # This would result in "most recent first, work your way backwards."
+    #job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp.desc()).first()
+
+    # This results in following the storage order and is by far the
+    # fastest methodology.
+    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').first()
 
     if not job == None:
         job.state = b'ALLOC'
@@ -168,6 +196,9 @@ def unlock():
 
         log.debug("Unlocking %s job %s" % (job.job_type, job.uuid), level=7)
         job.state = b'PENDING'
+
+        for collector in db.query(Collector).filter_by(job=job.id).all():
+            collector.job = None
 
         for worker in db.query(Worker).filter_by(job=job.id).all():
             worker.job = None
