@@ -81,16 +81,6 @@ def select_by_type(job_type):
     result = db.query(Job).filter_by(job_type=job_type).all()
     return result
 
-def select_by_type_and_state(job_type, state, limit=-1):
-    db = init_db('jobs')
-
-    if limit == -1:
-        result = db.query(Job).filter_by(job_type=job_type, state=state).order_by(Job.timestamp).all()
-    else:
-        result = db.query(Job).filter_by(job_type=job_type, state=state).order_by(Job.timestamp).limit(limit).all()
-
-    return result
-
 def select_for_collector(identity):
     db = init_db('jobs')
 
@@ -99,7 +89,20 @@ def select_for_collector(identity):
     if collector == None:
         return
 
-    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp).first()
+    # This is influenced by .update(), which resets the .timestamp to
+    # .utcnow(), effectively pushing all updated jobs to the back of the
+    # queue.
+    #
+    # Practical result is a massive amount of metadata gathering
+    # followed by a sudden surge of jobs getting DONE.
+    #job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp).first()
+
+    # This would result in "most recent first, work your way backwards."
+    #job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp.desc()).first()
+
+    # This results in following the storage order and is by far the
+    # fastest methodology.
+    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
 
     if not job == None:
         job.state = b'ALLOC'
@@ -116,7 +119,20 @@ def select_for_worker(identity):
     if worker == None:
         return
 
-    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp).first()
+    # This is influenced by .update(), which resets the .timestamp to
+    # .utcnow(), effectively pushing all updated jobs to the back of the
+    # queue.
+    #
+    # Practical result is a massive amount of metadata gathering
+    # followed by a sudden surge of jobs getting DONE.
+    #job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp).first()
+
+    # This would result in "most recent first, work your way backwards."
+    #job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp.desc()).first()
+
+    # This results in following the storage order and is by far the
+    # fastest methodology.
+    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').first()
 
     if not job == None:
         job.state = b'ALLOC'
