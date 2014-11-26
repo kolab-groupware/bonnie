@@ -100,7 +100,7 @@ def expire():
         if not worker.job == None:
             _job = db.query(Job).filter_by(id=worker.job).first()
             if not _job == None:
-                _job.state = b'READY'
+                _job.state = b'PENDING'
                 _job.timestamp = datetime.datetime.utcnow()
 
         db.delete(worker)
@@ -111,7 +111,7 @@ def expire():
         if not worker.job == None:
             _job = db.query(Job).filter_by(id=worker.job).first()
             if not _job == None:
-                _job.state = b'READY'
+                _job.state = b'PENDING'
                 _job.timestamp = datetime.datetime.utcnow()
 
         worker.state = b'STALE'
