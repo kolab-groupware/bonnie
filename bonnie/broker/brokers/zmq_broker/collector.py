@@ -96,3 +96,18 @@ def update(identity, **kw):
         setattr(collector, attr, value)
 
     db.commit()
+
+def expire():
+    db = init_db('collectors')
+
+    for collector in db.query(Collector).filter(Collector.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 60)), Collector.state != b'STALE').all():
+        log.debug("Marking collector %s as stale" % (collector.identity), level=7)
+        if not collector.job == None:
+            _job = db.query(Job).filter_by(id=collector.job).first()
+            if not _job == None:
+                _job.state = b'PENDING'
+                _job.timestamp = datetime.datetime.utcnow()
+
+        collector.state = b'STALE'
+        collector.timestamp = datetime.datetime.utcnow()
+        db.commit()
