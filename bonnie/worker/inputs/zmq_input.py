@@ -156,20 +156,19 @@ class ZMQInput(object):
         log.info("[%s] shutting down", self.identity)
         self.worker.close()
 
-    def set_state_busy(self):
+    def set_state_busy(self, _job_id):
         log.debug("[%s] Set state to BUSY" % (self.identity), level=9)
-        self.controller.send_multipart([b"STATE", b"BUSY", b"%s" % (self.job_uuid)])
+        self.report_timestamp = time.time()
         self.state = b"BUSY"
+        self.job_uuid = _job_id
 
     def set_state_ready(self):
         log.debug("[%s] Set state to READY" % (self.identity), level=9)
-        self.controller.send_multipart([b"STATE", b"READY"])
+        self.report_timestamp = time.time()
         self.state = b"READY"
         self.job_uuid = None
 
     def take_job(self, _job_id):
         log.debug("[%s] Accept job %s" % (self.identity, _job_id), level=9)
-        self.set_state_busy()
+        self.set_state_busy(_job_id)
         self.worker.send_multipart([b"GET", _job_id])
-        self.job_uuid = _job_id
-
