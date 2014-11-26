@@ -93,7 +93,7 @@ def select_by_type_and_state(job_type, state, limit=-1):
 
 def select_for_collector(identity):
     db = init_db('jobs')
-    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
+    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp).first()
 
     if not job == None:
         job.state = b'ALLOC'
@@ -104,7 +104,7 @@ def select_for_collector(identity):
 
 def select_for_worker(identity):
     db = init_db('jobs')
-    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').first()
+    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp).first()
 
     if not job == None:
         job.state = b'ALLOC'
