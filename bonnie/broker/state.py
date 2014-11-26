@@ -74,6 +74,7 @@ class Collector(DeclarativeBase):
     identity = Column(String(128))
     state = Column(String(16))
     job = Column(Integer, ForeignKey('job.id'))
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow())
     interests = relationship(
             "Interest",
             secondary=collector_interest_table
