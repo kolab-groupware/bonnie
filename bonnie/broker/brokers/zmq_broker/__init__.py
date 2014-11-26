@@ -323,6 +323,8 @@ class ZMQBroker(object):
                 job = None
             )
 
+        self._send_worker_job(identity)
+
     def _handle_wcr_GETACL(self, router, identity, message):
         log.debug("Handing GETACL for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
@@ -339,6 +341,8 @@ class ZMQBroker(object):
                 state = b'READY',
                 job = None
             )
+
+        self._send_worker_job(identity)
 
     def _handle_wcr_GETMETADATA(self, router, identity, message):
         log.debug("Handing GETMETADATA for identity %s (message: %r)" % (identity, message), level=7)
@@ -357,6 +361,8 @@ class ZMQBroker(object):
                 job = None
             )
 
+        self._send_worker_job(identity)
+
     def _handle_wcr_GETUSERDATA(self, router, identity, message):
         log.debug("Handing GETUSERDATA for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
@@ -373,6 +379,8 @@ class ZMQBroker(object):
                 state = b'READY',
                 job = None
             )
+
+        self._send_worker_job(identity)
 
     def _handle_wcr_HEADER(self, router, identity, message):
         log.debug("Handing HEADER for identity %s (message: %r)" % (identity, message), level=7)
@@ -391,6 +399,8 @@ class ZMQBroker(object):
                 job = None
             )
 
+        self._send_worker_job(identity)
+
     def _handle_wcr_PUSHBACK(self, router, identity, message):
         log.debug("Handing PUSHBACK for identity %s (message: %r)" % (identity, message), level=8)
         job_uuid = message[0]
@@ -403,6 +413,8 @@ class ZMQBroker(object):
                 state = b'READY',
                 job = None
             )
+
+        self._send_worker_job(identity)
 
     def _handle_wcr_STATE(self, router, identity, message):
         log.debug("Handing STATE for identity %s (message: %r)" % (identity, message), level=7)
