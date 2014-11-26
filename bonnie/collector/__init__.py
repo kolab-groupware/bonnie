@@ -43,15 +43,16 @@ class BonnieCollector(BonnieDaemon):
         self.handler_interests = {}
         self.handler_modules = {}
 
-    def execute(self, command, notification):
+    def execute(self, commands, notification):
         """
             Dispatch collector job to the according handler(s)
         """
-        log.debug("Executing collection command %s" % (command), level=8)
+        log.debug("Executing collection for %s" % (commands), level=8)
 
-        if self.handler_interests.has_key(command):
-            for interest in self.handler_interests[command]:
-                notification = interest['callback'](notification=notification)
+        for command in commands.split():
+            if self.handler_interests.has_key(command):
+                for interest in self.handler_interests[command]:
+                    notification = interest['callback'](notification=notification)
 
         return notification
 

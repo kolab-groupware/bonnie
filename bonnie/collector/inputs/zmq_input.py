@@ -65,7 +65,7 @@ class ZMQInput(object):
 
     def report_state(self, interests=[]):
         log.debug("[%s] Reporting state %s, %r" % (self.identity, self.state, self.interests), level=9)
-        self.collector.send_multipart([b"STATE", self.state, ",".join(self.interests)])
+        self.collector.send_multipart([b"STATE", self.state, " ".join(self.interests)])
         self.report_timestamp = time.time()
 
     def run(self, callback=None, interests=[]):

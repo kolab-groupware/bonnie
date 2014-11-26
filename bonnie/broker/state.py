@@ -103,8 +103,9 @@ class Job(DeclarativeBase):
     notification = Column(Text)
     job_type = Column(String(16), default='worker')
     state = Column(String(16))
-    cmd = Column(String(16))
+    cmd = Column(String(256))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow())
+    pushbacks = Column(Integer, default=0)
 
     def __init__(self, dealer, notification, job_type='worker'):
         DeclarativeBase.__init__(self)
@@ -116,6 +117,7 @@ class Job(DeclarativeBase):
         self.job_type = job_type
         self.timestamp = datetime.datetime.utcnow()
         self.cmd = None
+        self.pushbacks = 0
 
 class Worker(DeclarativeBase):
     __tablename__ = 'worker'

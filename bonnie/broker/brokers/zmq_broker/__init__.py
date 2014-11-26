@@ -135,7 +135,8 @@ class ZMQBroker(object):
 
         last_run = time.time()
         while True:
-            sockets = dict(self.poller.poll(10))
+            # TODO: adjust polling timout according to the number of pending jobs
+            sockets = dict(self.poller.poll(100))
 
             for socket, event in sockets.iteritems():
                 if event == zmq.POLLIN:
@@ -145,7 +146,7 @@ class ZMQBroker(object):
                         result = getattr(router, '%s' % callforward)()
                         callback(router, result)
 
-            if last_run < (time.time() - 1):
+            if last_run < (time.time() - 10):
                 stats_start = time.time()
                 jcp = job.count_by_type_and_state('collector', b'PENDING')
                 jwp = job.count_by_type_and_state('worker', b'PENDING')
@@ -163,6 +164,7 @@ class ZMQBroker(object):
                         'jp': sum([jcp, jwp]),
                         'jwa': jwa,
                         'jwp': jwp,
+                        'jo': job.count_by_state(b'ORPHANED'),
                         'wb': worker.count_by_state(b'BUSY'),
                         'wr': worker.count_by_state(b'READY'),
                         'ws': worker.count_by_state(b'STALE'),
@@ -172,7 +174,8 @@ class ZMQBroker(object):
                 stats['duration'] = stats_end - stats_start
 
                 log.info("""
-    Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d.
+    Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d,
+                orphaned=%(jo)d.
     Workers:    ready=%(wr)d, busy=%(wb)d, stale=%(ws)d,
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
@@ -225,6 +228,7 @@ class ZMQBroker(object):
 
         if not hasattr(self, '_handle_wr_%s' % (cmd)):
             log.error("Unhandled WR cmd %s" % (cmd))
+            return
 
         handler = getattr(self, '_handle_wr_%s' % (cmd))
         handler(router, worker_identity, message[2:])
@@ -236,6 +240,7 @@ class ZMQBroker(object):
 
         if not hasattr(self, '_handle_wcr_%s' % (cmd)):
             log.error("Unhandled WCR cmd %s" % (cmd))
+            self._handle_wcr_unknown(router, identity, message[2:])
             return
 
         handler = getattr(self, '_handle_wcr_%s' % (cmd))
@@ -311,91 +316,23 @@ class ZMQBroker(object):
 
         self._send_worker_job(identity)
 
-    def _handle_wcr_FETCH(self, router, identity, message):
-        log.debug("Handing FETCH for identity %s (message: %r)" % (identity, message), level=7)
+    def _handle_wcr_COLLECT(self, router, identity, message):
+        log.debug("Handing COLLECT for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
-        log.info("Job %s FETCH by %s" % (job_uuid, identity))
-        job.update(
-                job_uuid,
-                cmd = b'FETCH',
+        log.info("Job %s COLLECT by %s" % (job_uuid, identity))
+
+        updates = dict(
+                cmd = message[1],
                 state = b'PENDING',
                 job_type = 'collector'
             )
 
-        worker.update(
-                identity,
-                state = b'READY',
-                job = None
-            )
+        if len(message) > 2:
+            updates['notification'] = message[2]
 
-        self._send_worker_job(identity)
-
-    def _handle_wcr_GETACL(self, router, identity, message):
-        log.debug("Handing GETACL for identity %s (message: %r)" % (identity, message), level=7)
-        job_uuid = message[0]
-        log.info("Job %s GETACL by %s" % (job_uuid, identity))
         job.update(
                 job_uuid,
-                cmd = b'GETACL',
-                state = b'PENDING',
-                job_type = 'collector'
-            )
-
-        worker.update(
-                identity,
-                state = b'READY',
-                job = None
-            )
-
-        self._send_worker_job(identity)
-
-    def _handle_wcr_GETMETADATA(self, router, identity, message):
-        log.debug("Handing GETMETADATA for identity %s (message: %r)" % (identity, message), level=7)
-        job_uuid = message[0]
-        log.info("Job %s GETMETADATA by %s" % (job_uuid, identity))
-        job.update(
-                job_uuid,
-                cmd = b'GETMETADATA',
-                state = b'PENDING',
-                job_type = 'collector'
-            )
-
-        worker.update(
-                identity,
-                state = b'READY',
-                job = None
-            )
-
-        self._send_worker_job(identity)
-
-    def _handle_wcr_GETUSERDATA(self, router, identity, message):
-        log.debug("Handing GETUSERDATA for identity %s (message: %r)" % (identity, message), level=7)
-        job_uuid = message[0]
-        log.info("Job %s GETUSERDATA by %s" % (job_uuid, identity))
-        job.update(
-                job_uuid,
-                cmd = b'GETUSERDATA',
-                state = b'PENDING',
-                job_type = 'collector'
-            )
-
-        worker.update(
-                identity,
-                state = b'READY',
-                job = None
-            )
-
-        self._send_worker_job(identity)
-
-    def _handle_wcr_HEADER(self, router, identity, message):
-        log.debug("Handing HEADER for identity %s (message: %r)" % (identity, message), level=7)
-        job_uuid = message[0]
-        log.info("Job %s HEADER by %s" % (job_uuid, identity))
-        job.update(
-                job_uuid,
-                cmd = b'HEADER',
-                state = b'PENDING',
-                job_type = 'collector'
+                **updates
             )
 
         worker.update(
@@ -409,10 +346,20 @@ class ZMQBroker(object):
     def _handle_wcr_PUSHBACK(self, router, identity, message):
         log.debug("Handing PUSHBACK for identity %s (message: %r)" % (identity, message), level=8)
         job_uuid = message[0]
-        job.update(
-                job_uuid,
-                state = b'PENDING'
-            )
+        job_ = job.select(job_uuid)
+
+        if job_ is not None and job_.pushbacks < 5:
+            job.update(
+                    job_uuid,
+                    state = b'PENDING',
+                    pushbacks = job_.pushbacks + 1
+                )
+        else:
+            log.error("Job %s pushed back too many times" % (job_uuid))
+            job.update(
+                    job_uuid,
+                    state = b'ORPHANED'
+                )
 
         worker.update(
                 identity,
@@ -450,6 +397,19 @@ class ZMQBroker(object):
 
         if state == b'READY':
             self._send_worker_job(identity)
+
+    def _handle_wcr_unknown(self, router, identity, message):
+        job_uuid = message[0]
+        job.update(
+                job_uuid,
+                state = b'ORPHANED'
+            )
+
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
 
     ##
     ## Worker Router command functions

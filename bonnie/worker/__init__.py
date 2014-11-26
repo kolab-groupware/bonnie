@@ -177,12 +177,11 @@ class BonnieWorkerProcess(object):
             jobs.extend(_jobs)
 
         # trigger storage modules which registered interest in particular notification properties
-        if len(jobs) == 0:
-            for prop,storage_interests in self.storage_interests.iteritems():
-                if notification.has_key(prop):
-                    for interest in storage_interests:
-                        (notification, _jobs) = self.interest_callback(interest, notification)
-                        jobs.extend(_jobs)
+        for prop,storage_interests in self.storage_interests.iteritems():
+            if notification.has_key(prop):
+                for interest in storage_interests:
+                    (notification, _jobs) = self.interest_callback(interest, notification)
+                    jobs.extend(_jobs)
 
         # finally send notification to output handlers if no jobs remaining
         if len(jobs) == 0 and not notification.has_key('_suppress_output') and not event in self.output_exclude_events:
@@ -195,6 +194,8 @@ class BonnieWorkerProcess(object):
                 for interest in self.output_interests['_all']:
                     (notification, _jobs) = self.interest_callback(interest, notification)
                     jobs.extend(_jobs)
+
+        log.debug("Event notification %r processed. Jobs = %r" % (event, jobs), level=7)
 
         return notification, list(set(jobs))
 

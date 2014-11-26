@@ -364,6 +364,7 @@ class ElasticSearchStorage(object):
 
         now = int(time.time())
         base_uri = re.sub(';.+$', '', notification[attrib])
+        jobs = []
 
         log.debug("Resolve folder for %r = %r" % (attrib, base_uri), level=8)
 
@@ -375,12 +376,16 @@ class ElasticSearchStorage(object):
         # mailbox resolving requires metadata
         if not notification.has_key('metadata'):
             log.debug("Adding GETMETADATA job", level=8)
-            return (notification, [ b"GETMETADATA" ])
+            jobs.append(b"GETMETADATA")
 
         # before creating a folder entry, we should collect folder ACLs
         if not notification.has_key('acl'):
             log.debug("Adding GETACL", level=8)
-            return (notification, [ b"GETACL" ])
+            jobs.append(b"GETACL")
+
+        # reject notification with additional collector jobs
+        if len(jobs) > 0:
+            return (notification, jobs)
 
         # extract folder properties and a unique identifier from the notification
         folder = self.notificaton2folder(notification)
