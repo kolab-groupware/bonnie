@@ -135,11 +135,12 @@ class ZMQBroker(object):
 
         self.running = True
         last_run = time.time()
+        poller_timeout = int(conf.get('broker', 'zmq_poller_timeout', 100))
 
         while self.running:
             try:
                 # TODO: adjust polling timout according to the number of pending jobs
-                sockets = dict(self.poller.poll(100))
+                sockets = dict(self.poller.poll(poller_timeout))
             except KeyboardInterrupt, e:
                 log.info("zmq.Poller KeyboardInterrupt")
                 break

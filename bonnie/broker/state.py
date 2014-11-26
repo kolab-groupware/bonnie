@@ -133,21 +133,20 @@ class Worker(DeclarativeBase):
         self.identity = identity
         self.state = state
 
-def init_db(name, reinit=False):
+def init_db(name):
     """
         Returns a SQLAlchemy Session() instance.
     """
     global db
 
-    if not db == None and not reinit:
+    if not db == None:
         return db
 
-    if reinit:
-        import os
-        if os.path.isfile('sqlite:////var/lib/bonnie/state.db'):
-            os.unlink('sqlite:////var/lib/bonnie/state.db')
+    db_uri = conf.get('broker', 'state_sql_uri')
 
-    db_uri = 'sqlite:////var/lib/bonnie/state.db'
+    if not db_uri:
+        db_uri = 'sqlite:////var/lib/bonnie/state.db'
+
     echo = conf.debuglevel > 8
 
     try:
