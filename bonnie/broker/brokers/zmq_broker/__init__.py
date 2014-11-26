@@ -145,23 +145,42 @@ class ZMQBroker(object):
                         result = getattr(router, '%s' % callforward)()
                         callback(router, result)
 
-            self._send_jobs()
+            if last_run < (time.time() - 1):
+                jcp = job.count_by_type_and_state('collector', b'PENDING')
+                jwp = job.count_by_type_and_state('worker', b'PENDING')
+                jca = job.count_by_type_and_state('collector', b'ALLOC')
+                jwa = job.count_by_type_and_state('worker', b'ALLOC')
 
-            if last_run < (time.time() - (10 - conf.debuglevel)):
-                log.info(
-                        "Jobs: done=%d, pending=%d, alloc=%d. Workers: ready=%d, busy=%d, stale=%d. Collectors: ready=%d, busy=%d." % (
-                                job.count_by_state(b'DONE'),
-                                job.count_by_state(b'PENDING'),
-                                job.count_by_state(b'ALLOC'),
-                                worker.count_by_state(b'READY'),
-                                worker.count_by_state(b'BUSY'),
-                                worker.count_by_state(b'STALE'),
-                                collector.count_by_state(b'READY'),
-                                collector.count_by_state(b'BUSY')
-                            )
-                    )
+                stats = {
+                        'cb': collector.count_by_state(b'BUSY'),
+                        'cr': collector.count_by_state(b'READY'),
+                        'cs': collector.count_by_state(b'STALE'),
+                        'ja': sum([jca, jwa]),
+                        'jca': jca,
+                        'jcp': jcp,
+                        'jd': job.count_by_state(b'DONE'),
+                        'jp': sum([jcp, jwp]),
+                        'jwa': jwa,
+                        'jwp': jwp,
+                        'wb': worker.count_by_state(b'BUSY'),
+                        'wr': worker.count_by_state(b'READY'),
+                        'ws': worker.count_by_state(b'STALE'),
+                    }
+
+                log.info("""
+    Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d.
+    Workers:    ready=%(wr)d, busy=%(wb)d, stale=%(ws)d,
+                pending=%(jwp)d, alloc=%(jwa)d.
+    Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
+                pending=%(jcp)d, alloc=%(jca)d.""" % stats)
 
                 last_run = time.time()
+
+            for _collector in collector.select_by_state(b'READY'):
+                self._send_collector_job(_collector.identity)
+
+            for _worker in worker.select_by_state(b'READY'):
+                self._send_worker_job(_worker.identity)
 
             worker.expire()
             job.unlock()
@@ -226,9 +245,14 @@ class ZMQBroker(object):
             A collector has indicated it is done performing a job, or
             actually a command for a job.
         """
-        log.debug("Handling DONE for identity %s (message: %r)" % (identity, message), level=8)
+        if conf.debuglevel > 7:
+            log.debug("Handling DONE for identity %s (message: %r)" % (identity, message), level=8)
+        elif conf.debuglevel > 6:
+            log.debug("Handling DONE for identity %s (message: %r)" % (identity, message[:-1]), level=7)
 
         job_uuid = message[0]
+        log.info("Job %s DONE by %s" % (job_uuid, identity))
+
         notification = message[1]
 
         job.update(
@@ -245,30 +269,47 @@ class ZMQBroker(object):
                 job = None
             )
 
+        self._send_collector_job(identity)
+
     def _handle_cr_STATE(self, router, identity, message):
         """
             A collector is reporting its state.
         """
-        log.debug("Handling STATE for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handling STATE for identity %s (message: %r)" % (identity, message), level=7)
 
         state = message[0]
         interests = message[1].split(",")
 
         collector.set_state(identity, state, interests)
 
+        if state == b'READY':
+            self._send_collector_job(identity)
+
     ##
     ## Worker Controller Router command functions
     ##
 
     def _handle_wcr_DONE(self, router, identity, message):
-        log.debug("Handing DONE for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing DONE for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
-        job.set_state(job_uuid, b'DONE')
-        worker.set_state(identity, b'READY')
+        log.info("Job %s DONE by %s" % (job_uuid, identity))
+        job.update(
+                job_uuid,
+                state = b'DONE'
+            )
+
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
+
+        self._send_worker_job(identity)
 
     def _handle_wcr_FETCH(self, router, identity, message):
-        log.debug("Handing FETCH for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing FETCH for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
+        log.info("Job %s FETCH by %s" % (job_uuid, identity))
         job.update(
                 job_uuid,
                 cmd = b'FETCH',
@@ -276,9 +317,16 @@ class ZMQBroker(object):
                 job_type = 'collector'
             )
 
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
+
     def _handle_wcr_GETACL(self, router, identity, message):
-        log.debug("Handing GETACL for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing GETACL for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
+        log.info("Job %s GETACL by %s" % (job_uuid, identity))
         job.update(
                 job_uuid,
                 cmd = b'GETACL',
@@ -286,9 +334,16 @@ class ZMQBroker(object):
                 job_type = 'collector'
             )
 
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
+
     def _handle_wcr_GETMETADATA(self, router, identity, message):
-        log.debug("Handing GETMETADATA for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing GETMETADATA for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
+        log.info("Job %s GETMETADATA by %s" % (job_uuid, identity))
         job.update(
                 job_uuid,
                 cmd = b'GETMETADATA',
@@ -296,9 +351,16 @@ class ZMQBroker(object):
                 job_type = 'collector'
             )
 
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
+
     def _handle_wcr_GETUSERDATA(self, router, identity, message):
-        log.debug("Handing GETUSERDATA for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing GETUSERDATA for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
+        log.info("Job %s GETUSERDATA by %s" % (job_uuid, identity))
         job.update(
                 job_uuid,
                 cmd = b'GETUSERDATA',
@@ -306,13 +368,27 @@ class ZMQBroker(object):
                 job_type = 'collector'
             )
 
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
+            )
+
     def _handle_wcr_HEADER(self, router, identity, message):
-        log.debug("Handing HEADER for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing HEADER for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
+        log.info("Job %s HEADER by %s" % (job_uuid, identity))
         job.update(
                 job_uuid,
                 cmd = b'HEADER',
+                state = b'PENDING',
                 job_type = 'collector'
+            )
+
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
             )
 
     def _handle_wcr_PUSHBACK(self, router, identity, message):
@@ -321,23 +397,48 @@ class ZMQBroker(object):
         job.update(
                 job_uuid,
                 state = b'PENDING'
+
+        worker.update(
+                identity,
+                state = b'READY',
+                job = None
             )
 
     def _handle_wcr_STATE(self, router, identity, message):
-        log.debug("Handing STATE for identity %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing STATE for identity %s (message: %r)" % (identity, message), level=7)
         state = message[0]
-        worker.set_state(identity, state)
 
         if state == b'BUSY':
             job_uuid = message[1]
-            worker.set_job(identity, job_uuid)
+            _job = job.select(job_uuid)
+
+            if not _job == None:
+                _job_id = _job.id
+            else:
+                _job_id = None
+                state = b'READY'
+
+            worker.update(
+                    identity,
+                    state = state,
+                    job = _job_id
+                )
+        else:
+            worker.update(
+                    identity,
+                    state = state,
+                    job = None
+                )
+
+        if state == b'READY':
+            self._send_worker_job(identity)
 
     ##
     ## Worker Router command functions
     ##
 
     def _handle_wr_GET(self, router, identity, message):
-        log.debug("Handing GET for worker %s (message: %r)" % (identity, message), level=8)
+        log.debug("Handing GET for worker %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
         _job = job.select(job_uuid)
 
@@ -363,44 +464,46 @@ class ZMQBroker(object):
         stream.on_recv_stream(callback)
         ioloop.IOLoop.instance().start()
 
-    def _send_jobs(self):
-        collectors = collector.select_by_state(b'READY')
-        workers = worker.select_by_state(b'READY')
+    def _send_collector_job(self, identity):
+        _job = job.select_for_collector(identity)
 
-        for _collector in collectors:
-            _job = job.select_for_collector(_collector.identity)
+        if _job == None:
+            return
 
-            if _job == None:
-                continue
+        collector.update(
+                identity,
+                state = b'BUSY',
+                job = _job.id
+            )
 
-            collector.update(
-                    _collector.identity,
-                    state = b'BUSY',
-                    job = _job.id
-                )
+        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+        self.routers['collector']['router'].send_multipart(
+                [
+                        (_job.collector).encode('ascii'),
+                        (_job.cmd).encode('ascii'),
+                        (_job.uuid).encode('ascii'),
+                        (_job.notification).encode('ascii')
+                    ]
+            )
 
-            self.routers['collector']['router'].send_multipart(
-                    [
-                            (_job.collector).encode('ascii'),
-                            (_job.cmd).encode('ascii'),
-                            (_job.uuid).encode('ascii'),
-                            (_job.notification).encode('ascii')
-                        ]
-                )
+    def _send_worker_job(self, identity):
+        _job = job.select_for_worker(identity)
 
-        worker_jobs = job.select_by_type_and_state('worker', b'PENDING', limit=len(workers))
+        if _job == None:
+            return
 
-        for _job in worker_jobs:
-            selected = random.randint(0,(len(workers)-1))
-            _worker = workers[selected]
-            worker.send_job(_worker.identity, _job.uuid)
+        worker.update(
+                identity,
+                state = b'BUSY',
+                job = _job.id
+            )
 
-            self.routers['worker_controller']['router'].send_multipart(
-                    [
-                            (_worker.identity).encode('ascii'),
-                            b'TAKE',
-                            (_job.uuid).encode('ascii')
-                        ]
-                )
+        log.debug("Sending %s to %s" % (_job.uuid, identity), level=6)
 
-            workers.pop(selected)
+        self.routers['worker_controller']['router'].send_multipart(
+                [
+                        (identity).encode('ascii'),
+                        b'TAKE',
+                        (_job.uuid).encode('ascii')
+                    ]
+            )
