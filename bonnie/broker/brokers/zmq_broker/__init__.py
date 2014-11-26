@@ -353,13 +353,13 @@ class ZMQBroker(object):
     def _handle_wcr_PUSHBACK(self, router, identity, message):
         log.debug("Handing PUSHBACK for identity %s (message: %r)" % (identity, message), level=8)
         job_uuid = message[0]
-        job_ = job.select(job_uuid)
+        _job = job.select(job_uuid)
 
-        if job_ is not None and job_.pushbacks < 5:
+        if _job is not None and _job.pushbacks < 5:
             job.update(
                     job_uuid,
                     state = b'PENDING',
-                    pushbacks = job_.pushbacks + 1
+                    pushbacks = _job.pushbacks + 1
                 )
         else:
             log.error("Job %s pushed back too many times" % (job_uuid))
