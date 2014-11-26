@@ -146,6 +146,12 @@ class ZMQBroker(object):
                         result = getattr(router, '%s' % callforward)()
                         callback(router, result)
 
+            for _collector in collector.select_by_state(b'READY'):
+                self._send_collector_job(_collector.identity)
+
+            for _worker in worker.select_by_state(b'READY'):
+                self._send_worker_job(_worker.identity)
+
             if last_run < (time.time() - 10):
                 stats_start = time.time()
                 jcp = job.count_by_type_and_state('collector', b'PENDING')
@@ -184,12 +190,7 @@ class ZMQBroker(object):
 
                 last_run = time.time()
 
-            for _collector in collector.select_by_state(b'READY'):
-                self._send_collector_job(_collector.identity)
-
-            for _worker in worker.select_by_state(b'READY'):
-                self._send_worker_job(_worker.identity)
-
+            collector.expire()
             worker.expire()
             job.unlock()
             job.expire()
@@ -455,6 +456,7 @@ class ZMQBroker(object):
             )
 
         log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+
         self.routers['collector']['router'].send_multipart(
                 [
                         (_job.collector).encode('ascii'),
@@ -476,7 +478,7 @@ class ZMQBroker(object):
                 job = _job.id
             )
 
-        log.debug("Sending %s to %s" % (_job.uuid, identity), level=6)
+        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
 
         self.routers['worker_controller']['router'].send_multipart(
                 [

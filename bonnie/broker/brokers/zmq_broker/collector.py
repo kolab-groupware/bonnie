@@ -19,9 +19,14 @@
 # USA.
 #
 
+import datetime
 import time
 
-from bonnie.broker.state import init_db, Collector, Interest
+import bonnie
+conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie.broker.ZMQBroker')
+
+from bonnie.broker.state import init_db, Collector, Job, Interest
 
 def add(identity, state = b'READY', interests = []):
     db = init_db('collectors')
@@ -71,6 +76,7 @@ def set_state(identity, state, interests = []):
         collector = db.query(Collector).filter_by(identity=identity).first()
     else:
         collector.state = state
+        collector.timestamp = datetime.datetime.utcnow()
 
     if state == b'READY':
         collector.job = None

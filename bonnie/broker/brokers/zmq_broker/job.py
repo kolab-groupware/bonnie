@@ -93,6 +93,12 @@ def select_by_type_and_state(job_type, state, limit=-1):
 
 def select_for_collector(identity):
     db = init_db('jobs')
+
+    collector = db.query(Collector).filter(Collector.identity==identity, Collector.job == None, Collector.state == b'READY').first()
+
+    if collector == None:
+        return
+
     job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.timestamp).first()
 
     if not job == None:
@@ -104,6 +110,12 @@ def select_for_collector(identity):
 
 def select_for_worker(identity):
     db = init_db('jobs')
+
+    worker = db.query(Worker).filter(Worker.identity == identity, Worker.job == None, Worker.state == b'READY').first()
+
+    if worker == None:
+        return
+
     job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.timestamp).first()
 
     if not job == None:
