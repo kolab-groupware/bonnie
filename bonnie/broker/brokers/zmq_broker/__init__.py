@@ -171,7 +171,7 @@ class ZMQBroker(object):
                     }
                 stats_end = time.time()
 
-                stats['duration'] = stats_end - stats_start
+                stats['duration'] = "%.4f" % (stats_end - stats_start)
 
                 log.info("""
     Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d,
@@ -180,7 +180,7 @@ class ZMQBroker(object):
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
                 pending=%(jcp)d, alloc=%(jca)d.
-    Took:       seconds=%(duration)d.""" % stats)
+    Took:       seconds=%(duration)s.""" % stats)
 
                 last_run = time.time()
 
