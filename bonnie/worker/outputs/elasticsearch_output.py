@@ -8,6 +8,7 @@ import json
 
 import bonnie
 conf = bonnie.getConf()
+log = bonnie.getLogger('bonnie.worker.ElasticSearchOutput')
 
 class ElasticSearchOutput(object):
     def __init__(self, *args, **kw):
@@ -79,6 +80,7 @@ class ElasticSearchOutput(object):
 
         notification['@timestamp'] = datetime.datetime.strftime(timestamp, "%Y-%m-%dT%H:%M:%S.%fZ")
         index = 'logstash-%s' % (datetime.datetime.strftime(timestamp, "%Y.%m.%d"))
+        jobs = []
 
         # for notifications concerning multiple messages, create entries for each message
         if notification.has_key('messageHeaders') and isinstance(notification['messageHeaders'], dict) and len(notification['messageHeaders']) > 0:
@@ -94,16 +96,26 @@ class ElasticSearchOutput(object):
                 # remove vnd.cmu.envelope if we have headers
                 notification.pop('vnd.cmu.envelope', None)
 
+                try:
+                    self.es.create(
+                        index=index,
+                        doc_type='logs',
+                        body=self.notification2log(notification)
+                    )
+                except Exception, e:
+                    log.warning("ES create exception: %r", e)
+                    jobs.append(b'POSTPONE')
+                    break
+
+        else:
+            try:
                 self.es.create(
                     index=index,
                     doc_type='logs',
                     body=self.notification2log(notification)
                 )
-        else:
-            self.es.create(
-                index=index,
-                doc_type='logs',
-                body=self.notification2log(notification)
-            )
+            except Exception, e:
+                log.warning("ES create exception: %r", e)
+                jobs.append(b'POSTPONE')
 
-        return (notification, [])
+        return (notification, jobs)

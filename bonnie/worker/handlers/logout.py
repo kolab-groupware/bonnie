@@ -78,6 +78,6 @@ class LogoutHandler(HandlerBase):
                 time.sleep(1) # wait for storage and try again
 
             # push back into the job queue, the corresponding Login event may not yet have been processed.
-            return (notification, [b"PUSHBACK"])
+            return (notification, [b"POSTPONE"])
 
         return super(LogoutHandler, self).run(notification)

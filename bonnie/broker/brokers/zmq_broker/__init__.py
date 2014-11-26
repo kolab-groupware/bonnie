@@ -188,7 +188,8 @@ class ZMQBroker(object):
                         'jp': sum([jcp, jwp]),
                         'jwa': jwa,
                         'jwp': jwp,
-                        'jo': job.count_by_state(b'ORPHANED'),
+                        'jf': job.count_by_state(b'FAILED'),
+                        'jo': job.count_by_state(b'POSTPONED'),
                         'wb': worker.count_by_state(b'BUSY'),
                         'wr': worker.count_by_state(b'READY'),
                         'ws': worker.count_by_state(b'STALE'),
@@ -199,7 +200,7 @@ class ZMQBroker(object):
 
                 log.info("""
     Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d,
-                orphaned=%(jo)d.
+                postponed=%(jo)d, failed=%(jf)d.
     Workers:    ready=%(wr)d, busy=%(wb)d, stale=%(ws)d,
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
@@ -265,7 +266,7 @@ class ZMQBroker(object):
 
         if not hasattr(self, '_handle_wcr_%s' % (cmd)):
             log.error("Unhandled WCR cmd %s" % (cmd))
-            self._handle_wcr_unknown(router, identity, message[2:])
+            self._handle_wcr_UNKNOWN(router, identity, message[2:])
             return
 
         handler = getattr(self, '_handle_wcr_%s' % (cmd))
@@ -368,23 +369,15 @@ class ZMQBroker(object):
 
         self._send_worker_job(identity)
 
-    def _handle_wcr_PUSHBACK(self, router, identity, message):
-        log.debug("Handing PUSHBACK for identity %s (message: %r)" % (identity, message), level=8)
+    def _handle_wcr_POSTPONE(self, router, identity, message):
+        log.debug("Handing POSTPONE for identity %s (message: %r)" % (identity, message), level=7)
         job_uuid = message[0]
-        _job = job.select(job_uuid)
+        log.info("Job %s POSTPONE by %s" % (job_uuid, identity))
 
-        if _job is not None and _job.pushbacks < 5:
-            job.update(
-                    job_uuid,
-                    state = b'PENDING',
-                    pushbacks = _job.pushbacks + 1
-                )
-        else:
-            log.error("Job %s pushed back too many times" % (job_uuid))
-            job.update(
-                    job_uuid,
-                    state = b'ORPHANED'
-                )
+        job.update(
+                job_uuid,
+                state = b'POSTPONED'
+            )
 
         worker.update(
                 identity,
@@ -423,11 +416,11 @@ class ZMQBroker(object):
         if state == b'READY':
             self._send_worker_job(identity)
 
-    def _handle_wcr_unknown(self, router, identity, message):
+    def _handle_wcr_UNKNOWN(self, router, identity, message):
         job_uuid = message[0]
         job.update(
                 job_uuid,
-                state = b'ORPHANED'
+                state = b'FAILED'
             )
 
         worker.update(

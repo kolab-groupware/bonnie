@@ -30,6 +30,8 @@ log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 
 from bonnie.broker.state import init_db, Collector, Job, Worker
 
+MAX_RETRIES = 5
+
 def add(dealer, notification, job_type='worker'):
     """
         Add a new job.
@@ -202,5 +204,19 @@ def unlock():
 
         for worker in db.query(Worker).filter_by(job=job.id).all():
             worker.job = None
+
+    # process postponed jobs
+    for job in db.query(Job).filter(
+                Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 30)),
+                Job.state == b'POSTPONED'
+            ).all():
+
+        if job.pushbacks >= MAX_RETRIES:
+            log.error("Too many pushbacks for job %s" % (job.uuid))
+            job.state = b'FAILED'
+        else:
+            log.debug("Re-activating postponed job %s" % (job.uuid), level=7)
+            job.state = b'PENDING'
+            job.pushbacks += 1
 
     db.commit()

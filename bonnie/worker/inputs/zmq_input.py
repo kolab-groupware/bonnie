@@ -143,7 +143,14 @@ class ZMQInput(object):
                             self.controller.send_multipart([b"DONE", self.job_uuid])
                         else:
                             log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
-                            self.controller.send_multipart([b"COLLECT", self.job_uuid, b" ".join(jobs)])
+
+                            # send 'GET*' jobs as COLLECT
+                            collect_jobs = [j for j in jobs if j.startswith('GET')]
+                            if len(collect_jobs) > 0:
+                                self.controller.send_multipart([b"COLLECT", self.job_uuid, b" ".join(collect_jobs)])
+                            else:
+                                # FIXME: the broker can actually only handle one job per notification
+                                self.controller.send_multipart([jobs[0], self.job_uuid])
 
                         self.set_state_ready()
 
