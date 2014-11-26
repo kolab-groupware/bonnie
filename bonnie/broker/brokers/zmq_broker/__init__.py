@@ -133,7 +133,9 @@ class ZMQBroker(object):
                 recv_multipart = self._cb_wcr_recv_multipart
             )
 
-        last_run = time.time()
+        last_expire = time.time()
+        last_state = time.time()
+
         while True:
             # TODO: adjust polling timout according to the number of pending jobs
             sockets = dict(self.poller.poll(100))
@@ -152,7 +154,14 @@ class ZMQBroker(object):
             for _worker in worker.select_by_state(b'READY'):
                 self._send_worker_job(_worker.identity)
 
-            if last_run < (time.time() - 10):
+            if last_expire < (time.time() - 30):
+                collector.expire()
+                worker.expire()
+                job.unlock()
+                job.expire()
+                last_expire = time.time()
+
+            if last_state < (time.time() - 10):
                 stats_start = time.time()
                 jcp = job.count_by_type_and_state('collector', b'PENDING')
                 jwp = job.count_by_type_and_state('worker', b'PENDING')
@@ -186,14 +195,11 @@ class ZMQBroker(object):
                 pending=%(jwp)d, alloc=%(jwa)d.
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
                 pending=%(jcp)d, alloc=%(jca)d.
-    Took:       seconds=%(duration)s.""" % stats)
+    Took:       seconds=%(duration)s.""" % stats
 
-                last_run = time.time()
+                log.info(info)
 
-            collector.expire()
-            worker.expire()
-            job.unlock()
-            job.expire()
+                last_state = time.time()
 
     def _cb_cr_recv_multipart(self, router, message):
         """
