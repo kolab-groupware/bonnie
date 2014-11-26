@@ -56,6 +56,11 @@ def count_by_type(job_type):
     result = db.query(Job).filter_by(job_type=job_type).all()
     return result
 
+def count_by_type_and_state(job_type, state):
+    db = init_db('jobs')
+    result = db.query(Job).filter_by(job_type=job_type, state=state).count()
+    return result
+
 def select(job_uuid):
     db = init_db('jobs')
     result = db.query(Job).filter_by(uuid=job_uuid).first()
@@ -88,11 +93,25 @@ def select_by_type_and_state(job_type, state, limit=-1):
 
 def select_for_collector(identity):
     db = init_db('jobs')
-    result = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
-    if not result == None:
-        result.state = b'ALLOC'
-        result.timestamp = datetime.datetime.utcnow()
-    return result
+    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
+
+    if not job == None:
+        job.state = b'ALLOC'
+        job.timestamp = datetime.datetime.utcnow()
+        db.commit()
+
+    return job
+
+def select_for_worker(identity):
+    db = init_db('jobs')
+    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').first()
+
+    if not job == None:
+        job.state = b'ALLOC'
+        job.timestamp = datetime.datetime.utcnow()
+        db.commit()
+
+    return job
 
 def set_state(uuid, state):
     db = init_db('jobs')
@@ -112,6 +131,9 @@ def update(job_uuid, **kw):
     db = init_db('jobs')
     job = db.query(Job).filter_by(uuid=job_uuid).first()
 
+    if job == None:
+        return
+
     for attr, value in kw.iteritems():
         setattr(job, attr, value)
 
@@ -126,8 +148,8 @@ def expire():
     """
     db = init_db('jobs')
 
-    for job in db.query(Job).filter(Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 120)), Job.state == b'DONE').all():
-        log.info("Purging job %s" % (job.uuid))
+    for job in db.query(Job).filter(Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 300)), Job.state == b'DONE').all():
+        log.debug("Purging job %s" % (job.uuid), level=7)
         db.delete(job)
 
     db.commit()
@@ -144,7 +166,7 @@ def unlock():
                 Job.state == b'ALLOC'
             ).all():
 
-        log.info("Unlocking %s job %s" % (job.job_type, job.uuid))
+        log.debug("Unlocking %s job %s" % (job.job_type, job.uuid), level=7)
         job.state = b'PENDING'
 
         for worker in db.query(Worker).filter_by(job=job.id).all():

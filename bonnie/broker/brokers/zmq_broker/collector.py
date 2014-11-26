@@ -69,8 +69,11 @@ def set_state(identity, state, interests = []):
         db.add(Collector(identity, state))
         db.commit()
         collector = db.query(Collector).filter_by(identity=identity).first()
+    else:
+        collector.state = state
 
-    collector.state = state
+    if state == b'READY':
+        collector.job = None
 
     for cmd in interests:
         interest = db.query(Interest).filter_by(cmd=cmd).first()

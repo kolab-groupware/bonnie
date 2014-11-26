@@ -53,19 +53,6 @@ def select(identity):
     result = db.query(Worker).filter_by(identity=identity).first()
     return result
 
-def send_job(identity, job_uuid):
-    db = init_db('workers')
-
-    job = db.query(Job).filter_by(uuid=job_uuid).first()
-    worker = db.query(Worker).filter_by(identity=identity).first()
-
-    job.state = b'ALLOC'
-    job.timestamp = datetime.datetime.utcnow()
-    worker.timestamp = datetime.datetime.utcnow()
-    worker.state = b'BUSY'
-    worker.job = job.id
-    db.commit()
-
 def set_job(identity, job_uuid):
     db = init_db('workers')
     job = db.query(Job).filter_by(uuid=job_uuid).first()
@@ -91,14 +78,42 @@ def set_state(identity, state):
         worker.timestamp = datetime.datetime.utcnow()
         db.commit()
 
-def expire():
-    db = init_db('workers')
-    for worker in db.query(Worker).filter(Worker.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 120)), Worker.state == b'STALE').all():
-        log.info("Purging worker %s as very stale" % (worker.identity))
-        db.delete(worker)
+def update(identity, **kw):
+    db = init_db('identity')
+    worker = db.query(Worker).filter_by(identity=identity).first()
 
-    for worker in db.query(Worker).filter(Worker.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 60)), Worker.state != b'STALE').all():
-        log.info("Marking worker %s as stale" % (worker.identity))
-        worker.state = b'STALE'
+    if worker == None:
+        db.add(Worker(identity, b'READY'))
+    else:
+        for attr, value in kw.iteritems():
+            setattr(worker, attr, value)
+
+        worker.timestamp = datetime.datetime.utcnow()
 
     db.commit()
+
+def expire():
+    db = init_db('workers')
+    for worker in db.query(Worker).filter(Worker.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 60)), Worker.state == b'STALE').all():
+        log.debug("Purging worker %s as very stale" % (worker.identity), level=7)
+
+        if not worker.job == None:
+            _job = db.query(Job).filter_by(id=worker.job).first()
+            if not _job == None:
+                _job.state = b'READY'
+                _job.timestamp = datetime.datetime.utcnow()
+
+        db.delete(worker)
+        db.commit()
+
+    for worker in db.query(Worker).filter(Worker.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 60)), Worker.state != b'STALE').all():
+        log.debug("Marking worker %s as stale" % (worker.identity), level=7)
+        if not worker.job == None:
+            _job = db.query(Job).filter_by(id=worker.job).first()
+            if not _job == None:
+                _job.state = b'READY'
+                _job.timestamp = datetime.datetime.utcnow()
+
+        worker.state = b'STALE'
+        worker.timestamp = datetime.datetime.utcnow()
+        db.commit()
