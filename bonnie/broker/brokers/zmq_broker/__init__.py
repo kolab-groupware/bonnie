@@ -407,6 +407,7 @@ class ZMQBroker(object):
         job.update(
                 job_uuid,
                 state = b'PENDING'
+            )
 
         worker.update(
                 identity,
