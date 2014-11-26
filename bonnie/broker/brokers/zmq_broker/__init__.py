@@ -24,6 +24,7 @@
 """
 
 from multiprocessing import Process
+import signal
 import random
 import re
 import sys
@@ -41,6 +42,8 @@ import job
 import worker
 
 class ZMQBroker(object):
+    running = False
+
     def __init__(self):
         """
             A ZMQ Broker for Bonnie.
@@ -49,6 +52,7 @@ class ZMQBroker(object):
         self.poller = zmq.Poller()
 
         self.routers = {}
+        self.router_processes = {}
 
     def register(self, callback):
         callback({ '_all': self.run })
@@ -92,16 +96,12 @@ class ZMQBroker(object):
         if bind_address == None:
             bind_address = default
 
-        setattr(
-                self,
-                '%s_router' % (name),
-                Process(
-                        target=self._run_router_process,
-                        args=(callback, bind_address)
-                    )
+        self.router_processes[name] = Process(
+                target=self._run_router_process,
+                args=(callback, bind_address)
             )
 
-        getattr(self, '%s_router' % (name)).start()
+        self.router_processes[name].start()
 
     def find_router(self, socket):
         for name, attrs in self.routers.iteritems():
@@ -133,10 +133,19 @@ class ZMQBroker(object):
                 recv_multipart = self._cb_wcr_recv_multipart
             )
 
+        self.running = True
         last_run = time.time()
-        while True:
-            # TODO: adjust polling timout according to the number of pending jobs
-            sockets = dict(self.poller.poll(100))
+
+        while self.running:
+            try:
+                # TODO: adjust polling timout according to the number of pending jobs
+                sockets = dict(self.poller.poll(100))
+            except KeyboardInterrupt, e:
+                log.info("zmq.Poller KeyboardInterrupt")
+                break
+            except Exception, e:
+                log.error("zmq.Poller error: %r", e)
+                sockets = dict()
 
             for socket, event in sockets.iteritems():
                 if event == zmq.POLLIN:
@@ -193,6 +202,17 @@ class ZMQBroker(object):
             worker.expire()
             job.unlock()
             job.expire()
+
+
+        log.info("Shutting down")
+
+        for attrs in self.routers.values():
+            attrs['router'].close()
+
+        for proc in self.router_processes.values():
+            proc.terminate()
+
+        self.context.term()
 
     def _cb_cr_recv_multipart(self, router, message):
         """
@@ -440,7 +460,21 @@ class ZMQBroker(object):
 
         stream = zmqstream.ZMQStream(router)
         stream.on_recv_stream(callback)
-        ioloop.IOLoop.instance().start()
+
+        # catch sigterm and terminate the ioloop
+        def _terminate(*args, **kw):
+            log.info("ioloop.IOLoop shutting down")
+            ioloop.IOLoop.instance().stop()
+
+        signal.signal(signal.SIGTERM, _terminate)
+
+        try:
+            ioloop.IOLoop.instance().start()
+        except KeyboardInterrupt, e:
+            log.info("ioloop.IOLoop KeyboardInterrupt")
+        except Exception, e:
+            log.error("ioloop.IOLoop error: %r", e)
+
 
     def _send_collector_job(self, identity):
         _job = job.select_for_collector(identity)
