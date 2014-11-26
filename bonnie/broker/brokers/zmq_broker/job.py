@@ -28,7 +28,7 @@ import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.broker.ZMQBroker')
 
-from bonnie.broker.state import init_db, Job, Worker
+from bonnie.broker.state import init_db, Collector, Job, Worker
 
 def add(dealer, notification, job_type='worker'):
     """
@@ -168,6 +168,9 @@ def unlock():
 
         log.debug("Unlocking %s job %s" % (job.job_type, job.uuid), level=7)
         job.state = b'PENDING'
+
+        for collector in db.query(Collector).filter_by(job=job.id).all():
+            collector.job = None
 
         for worker in db.query(Worker).filter_by(job=job.id).all():
             worker.job = None
