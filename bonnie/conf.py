@@ -171,18 +171,7 @@ class Conf(object):
                 self.read_config()
                 return self.cfg_parser.get(section, key)
 
-        if hasattr(self, "get_%s_%s" % (section,key)):
-            try:
-                exec("retval = self.get_%s_%s(quiet)" % (section,key))
-            except Exception, e:
-                log.error(_("Could not execute configuration function: %s") % ("get_%s_%s(quiet=%r)" % (section,key,quiet)))
-                return None
-
-            return retval
-
-        if quiet:
-            return ""
-        else:
+        if not quiet:
             log.warning(_("Option %s/%s does not exist in config file %s, pulling from defaults") % (section, key, self.config_file))
             if hasattr(self.defaults, "%s_%s" % (section,key)):
                 return getattr(self.defaults, "%s_%s" % (section,key))
@@ -192,10 +181,10 @@ class Conf(object):
                     return _dict[key]
                 else:
                     log.warning(_("Option does not exist in defaults."))
-                    return None
             else:
                 log.warning(_("Option does not exist in defaults."))
-                return None
+
+        return default
 
     def load_config(self, config):
         """
