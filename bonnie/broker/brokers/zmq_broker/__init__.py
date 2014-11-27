@@ -24,9 +24,10 @@
 """
 
 from multiprocessing import Process
-import signal
+import os
 import random
 import re
+import signal
 import sys
 import threading
 import time
@@ -207,6 +208,8 @@ class ZMQBroker(object):
     Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
                 pending=%(jcp)d, alloc=%(jca)d.
     Took:       seconds=%(duration)s.""" % stats)
+
+                self._write_stats(stats)
 
                 last_state = time.time()
 
@@ -533,3 +536,32 @@ class ZMQBroker(object):
                         (_job.uuid).encode('ascii')
                     ]
             )
+
+    def _write_stats(self, stats):
+        if os.access("/var/lib/bonnie/state.state", os.W_OK):
+            try:
+                fp = open("/var/lib/bonnie/state.stats", "w")
+                fp.write("""# Source this file in your script
+jobs_done=%(jd)d
+jobs_pending=%(jp)d
+jobs_alloc=%(ja)d
+jobs_orphaned=%(jo)d
+workers_ready=%(wr)d
+workers_busy=%(wb)d
+workers_stale=%(ws)d
+collectors_ready=%(cr)d
+collectors_busy=%(cb)d
+collectors_stale=%(cs)d
+collector_jobs_pending=%(jcp)d
+collector_jobs_alloc=%(jcp)d
+worker_jobs_pending=%(jwp)d
+worker_jobs_alloc=%(jwa)d
+""" % stats)
+                fp.close()
+
+            except Exception, errmsg:
+                log.error(
+                        "An error occurred writing out the stats file:\n%s" % (
+                                errmsg
+                            )
+                    )
