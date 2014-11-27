@@ -77,9 +77,11 @@ class ZMQInput(object):
         self.interests = interests
         self.report_state()
 
+        poller_timeout = int(conf.get('worker', 'zmq_poller_timeout', 100))
+
         while self.running:
             try:
-                sockets = dict(self.poller.poll(1))
+                sockets = dict(self.poller.poll(poller_timeout))
             except KeyboardInterrupt, e:
                 log.info("zmq.Poller KeyboardInterrupt")
                 break
