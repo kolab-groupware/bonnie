@@ -31,6 +31,7 @@ import os
 import socket
 import time
 import zmq
+from zmq.eventloop import ioloop, zmqstream
 
 import bonnie
 conf = bonnie.getConf()
@@ -38,7 +39,6 @@ log = bonnie.getLogger('bonnie.collector.ZMQInput')
 
 class ZMQInput(object):
     state = b"READY"
-    running = False
 
     def __init__(self, *args, **kw):
         self.interests = []
@@ -54,8 +54,7 @@ class ZMQInput(object):
         self.collector.identity = (self.identity).encode('ascii')
         self.collector.connect(zmq_broker_address)
 
-        self.poller = zmq.Poller()
-        self.poller.register(self.collector, zmq.POLLIN)
+        self.stream = zmqstream.ZMQStream(self.collector)
 
     def name(self):
         return 'zmq_input'
@@ -71,47 +70,37 @@ class ZMQInput(object):
     def run(self, callback=None, interests=[]):
         log.info("[%s] starting", self.identity)
 
-        self.running = True
-
         # report READY state with interests
         self.interests = interests
+        self.notify_callback = callback
         self.report_state()
 
-        poller_timeout = int(conf.get('worker', 'zmq_poller_timeout', 100))
+        self.stream.on_recv(self._cb_on_recv_multipart)
+        ioloop.IOLoop.instance().start()
 
-        while self.running:
-            try:
-                sockets = dict(self.poller.poll(poller_timeout))
-            except KeyboardInterrupt, e:
-                log.info("zmq.Poller KeyboardInterrupt")
-                break
-            except Exception, e:
-                log.error("zmq.Poller error: %r", e)
-                sockets = dict()
+    def _cb_on_recv_multipart(self, message):
+        """
+            Receive a message on the Collector Router.
+        """
+        log.debug("Collector Router Message: %r" % (message), level=8)
+        collector_identity = message[0]
 
-            if self.report_timestamp < (time.time() - 60):
-                self.report_state()
+        if message[0] == b"STATE" or not self.state == b"READY":
+            self.report_state()
+        else:
+            job_uuid = message[1]
+            notification = message[2]
 
-            if self.collector in sockets:
-                if sockets[self.collector] == zmq.POLLIN:
-                    _message = self.collector.recv_multipart()
+            if not self.notify_callback == None:
+                self.notify_callback(message[0], job_uuid, notification)
 
-                    if _message[0] == b"STATE":
-                        self.report_state()
+    def callback_done(self, job_uuid, result):
+        log.debug("Handler callback done for job %s: %r" % (job_uuid, result), level=8)
+        self.report_timestamp = time.time()
+        self.collector.send_multipart([b"DONE", job_uuid, result])
+        log.debug("Handler results sent for job %s" % (job_uuid), level=7)
 
-                    else:
-                        if not self.state == b"READY":
-                            self.report_state()
-
-                        else:
-                            _job_uuid = _message[1]
-                            _notification = _message[2]
-
-                            if not callback == None:
-                                result = callback(_message[0], _notification)
-
-                            self.report_timestamp = time.time()
-                            self.collector.send_multipart([b"DONE", _job_uuid, result])
-
+    def terminate(self):
         log.info("[%s] shutting down", self.identity)
+        ioloop.IOLoop.instance().stop()
         self.collector.close()
