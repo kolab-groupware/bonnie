@@ -166,6 +166,9 @@ class ZMQBroker(object):
                 self._send_worker_job(_worker.identity)
 
             if last_expire < (time.time() - 30):
+                for _collector in collector.select_by_state(b'READY'):
+                    self._request_collector_state(_collector.identity)
+
                 collector.expire()
                 worker.expire()
                 job.unlock()
@@ -565,3 +568,7 @@ worker_jobs_alloc=%(jwa)d
                                 errmsg
                             )
                     )
+
+    def _request_collector_state(self, identity):
+        log.debug("Requesting state from %s" % (identity), level=7)
+        self.routers['collector']['router'].send_multipart([identity.encode('ascii'), b"STATE"])
