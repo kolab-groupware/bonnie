@@ -53,6 +53,7 @@ class ZMQBroker(object):
 
         self.routers = {}
         self.router_processes = {}
+        self.collector_interests = []
 
     def register(self, callback):
         callback({ '_all': self.run })
@@ -262,15 +263,23 @@ class ZMQBroker(object):
     def _cb_wcr_recv_multipart(self, router, message):
         log.debug("Worker Controller Router Message: %r" % (message), level=8)
         worker_identity = message[0]
-        cmd = message[1]
+        commands = message[1].split(" ")
 
-        if not hasattr(self, '_handle_wcr_%s' % (cmd)):
-            log.error("Unhandled WCR cmd %s" % (cmd))
-            self._handle_wcr_UNKNOWN(router, identity, message[2:])
-            return
+        # check for aggregated collector commands
+        collector_commands = [c for c in commands if c in self.collector_interests]
 
-        handler = getattr(self, '_handle_wcr_%s' % (cmd))
-        handler(router, worker_identity, message[2:])
+        if len(collector_commands) == len(commands):
+            self._handle_wcr_COLLECT(router, worker_identity, message[1], message[2:])
+        else:
+            cmd = message[1]
+
+            if not hasattr(self, '_handle_wcr_%s' % (cmd)):
+                log.error("Unknown WCR cmd %s for job %s" % (cmd, message[2]))
+                self._handle_wcr_UNKNOWN(router, worker_identity, message[2:])
+                return
+
+            handler = getattr(self, '_handle_wcr_%s' % (cmd))
+            handler(router, worker_identity, message[2:])
 
     ##
     ## Collector Router command functions
@@ -314,7 +323,13 @@ class ZMQBroker(object):
         log.debug("Handling STATE for identity %s (message: %r)" % (identity, message), level=7)
 
         state = message[0]
-        interests = message[1].split(",")
+        interests = message[1].split(" ")
+
+        # register the reported interests
+        if len(interests) > 0:
+            _interests = list(interests)
+            _interests.extend(self.collector_interests)
+            self.collector_interests = list(set(_interests))
 
         collector.set_state(identity, state, interests)
 
@@ -342,19 +357,19 @@ class ZMQBroker(object):
 
         self._send_worker_job(identity)
 
-    def _handle_wcr_COLLECT(self, router, identity, message):
-        log.debug("Handing COLLECT for identity %s (message: %r)" % (identity, message), level=7)
+    def _handle_wcr_COLLECT(self, router, identity, commands, message):
+        log.debug("Handing COLLECT for identity %s (commands: %r, message: %r)" % (identity, commands, message), level=7)
         job_uuid = message[0]
-        log.info("Job %s COLLECT by %s" % (job_uuid, identity))
+        log.info("Job %s COLLECT (%r) by %s" % (job_uuid, commands, identity))
 
         updates = dict(
-                cmd = message[1],
+                cmd = commands,
                 state = b'PENDING',
                 job_type = 'collector'
             )
 
-        if len(message) > 2:
-            updates['notification'] = message[2]
+        if len(message) > 1:
+            updates['notification'] = message[1]
 
         job.update(
                 job_uuid,
