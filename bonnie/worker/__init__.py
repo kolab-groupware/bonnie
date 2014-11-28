@@ -197,7 +197,7 @@ class BonnieWorkerProcess(object):
 
         log.debug("Event notification %r processed. Jobs = %r" % (event, jobs), level=7)
 
-        return notification, list(set(jobs))
+        return json.dumps(notification), list(set(jobs))
 
     def input_report(self):
         """
