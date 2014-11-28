@@ -30,8 +30,11 @@ def getLogger(name):
         Return the correct logger class.
     """
     logging.setLoggerClass(Logger)
-    log = logging.getLogger(name=name)
+
+    log = logging.getLogger(name=name.replace(".", "_"))
     return log
+
+log = getLogger('bonnie')
 
 from bonnie.conf import Conf
 conf = Conf()
