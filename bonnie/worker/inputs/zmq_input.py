@@ -145,7 +145,7 @@ class ZMQInput(object):
                             self.controller.send_multipart([b"DONE", self.job_uuid])
                         else:
                             log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
-                            self.controller.send_multipart([b" ".join(jobs), self.job_uuid])
+                            self.controller.send_multipart([b'COLLECT', b" ".join(jobs), self.job_uuid, notification])
 
                         self.set_state_ready()
 
