@@ -49,16 +49,20 @@ class ElasticSearchStorage(object):
     users_doctype = 'user'
 
     def __init__(self, *args, **kw):
-        elasticsearch_output_address = conf.get('worker', 'elasticsearch_storage_address')
+        elasticsearch_output_address = conf.get(
+                'worker',
+                'elasticsearch_storage_address'
+            )
 
         if elasticsearch_output_address == None:
             elasticsearch_output_address = 'localhost'
 
         self.es = elasticsearch.Elasticsearch(
-            host=elasticsearch_output_address
-        )
+                host=elasticsearch_output_address
+            )
 
-        # use dicts with automatic expiration for caching user/folder lookups
+        # use dicts with automatic expiration for caching user/folder
+        # lookups
         self.user_id_cache = CachedDict(300)
         self.folder_id_cache = CachedDict(120)
 
@@ -67,11 +71,20 @@ class ElasticSearchStorage(object):
 
     def register(self, callback, **kw):
         if callback is not None:
-            self.worker = callback(interests={
-                'uidset': { 'callback': self.resolve_folder_uri },
-                'folder_uniqueid': { 'callback': self.resolve_folder_uri },
-                'mailboxID': { 'callback': self.resolve_folder_uri, 'kw': { 'attrib': 'mailboxID' } }
-            })
+            self.worker = callback(
+                    interests = {
+                            'uidset': {
+                                    'callback': self.resolve_folder_uri
+                                },
+                            'folder_uniqueid': {
+                                    'callback': self.resolve_folder_uri
+                                },
+                            'mailboxID': {
+                                    'callback': self.resolve_folder_uri,
+                                    'kw': { 'attrib': 'mailboxID' }
+                                }
+                        }
+                )
 
     def get(self, key, index=None, doctype=None, fields=None, **kw):
         """
@@ -81,28 +94,44 @@ class ElasticSearchStorage(object):
         _doctype = doctype or self.default_doctype
         try:
             res = self.es.get(
-                index=_index,
-                doc_type=_doctype,
-                id=key,
-                _source_include=fields or '*'
-            )
-            log.debug("ES get result for %s/%s/%s: %r" % (_index, _doctype, key, res), level=8)
+                    index = _index,
+                    doc_type = _doctype,
+                    id = key,
+                    _source_include = fields or '*'
+                )
+
+            log.debug(
+                    "ES get result for %s/%s/%s: %r" % (
+                            _index,
+                            _doctype,
+                            key,
+                            res
+                        ),
+                    level = 8
+                )
 
             if res['found']:
                 result = self._transform_result(res)
             else:
                 result = None
 
-        except elasticsearch.exceptions.NotFoundError, e:
-            log.debug("ES entry not found for %s/%s/%s: %r" % (_index, _doctype, key, e))
+        except elasticsearch.exceptions.NotFoundError, errmsg:
+            log.debug(
+                    "ES entry not found for %s/%s/%s: %r" % (
+                            _index,
+                            _doctype,
+                            key,
+                            errmsg
+                        )
+                )
+
             result = None
 
-        except Exception, e:
-            log.warning("ES get exception: %r", e)
+        except Exception, errmsg:
+            log.warning("ES get exception: %r" % (errmsg))
             result = None
 
         return result
-
 
     def set(self, key, value, index=None, doctype=None, **kw):
         """
@@ -110,55 +139,82 @@ class ElasticSearchStorage(object):
         """
         _index = index or self.default_index
         _doctype = doctype or self.default_doctype
+
         try:
             existing = self.es.get(
-                index=_index,
-                doc_type=_doctype,
-                id=key,
-                fields=None
-            )
-            log.debug("ES get result for %s/%s/%s: %r" % (_index, _doctype, key, existing), level=8)
+                    index = _index,
+                    doc_type = _doctype,
+                    id = key,
+                    fields = None
+                )
 
-        except elasticsearch.exceptions.NotFoundError, e:
+            log.debug(
+                    "ES get result for %s/%s/%s: %r" % (
+                            _index,
+                            _doctype,
+                            key,
+                            existing
+                        ),
+                    level = 8
+                )
+
+        except elasticsearch.exceptions.NotFoundError, errmsg:
             existing = None
 
-        except Exception, e:
-            log.warning("ES get exception: %r", e)
+        except Exception, errmsg:
+            log.warning("ES get exception: %r" % (errmsg))
             existing = None
 
         if existing is None:
             try:
                 ret = self.es.create(
-                    index=_index,
-                    doc_type=_doctype,
-                    id=key,
-                    body=value,
-                    consistency='one',
-                    replication='async'
-                )
-                log.debug("Created ES object for %s/%s/%s: %r" % (_index, _doctype, key, ret), level=8)
+                        index = _index,
+                        doc_type = _doctype,
+                        id = key,
+                        body = value,
+                        consistency = 'one',
+                        replication = 'async'
+                    )
 
-            except Exception, e:
-                log.warning("ES create exception: %r", e)
+                log.debug(
+                        "Created ES object for %s/%s/%s: %r" % (
+                                _index,
+                                _doctype,
+                                key,
+                                ret
+                            ),
+                        level = 8
+                    )
+
+            except Exception, errmsg:
+                log.warning("ES create exception: %r" % (errmsg))
                 ret = None
+
         else:
             try:
                 ret = self.es.update(
-                    index=_index,
-                    doc_type=_doctype,
-                    id=key,
-                    body={ 'doc': value },
-                    consistency='one',
-                    replication='async'
-                )
-                log.debug("Updated ES object for %s/%s/%s: %r" % (_index, _doctype, key, ret), level=8)
+                        index = _index,
+                        doc_type = _doctype,
+                        id = key,
+                        body = { 'doc': value },
+                        consistency = 'one',
+                        replication = 'async'
+                    )
 
-            except Exception, e:
-                log.warning("ES update exception: %r", e)
+                log.debug(
+                        "Updated ES object for %s/%s/%s: %r" % (
+                                _index,
+                                _doctype,
+                                key,
+                                ret
+                            ),
+                        level = 8
+                    )
+
+            except Exception, errmsg:
+                log.warning("ES update exception: %r" % (errmsg))
 
         return ret
-
-
 
     def select(self, query, index=None, doctype=None, fields=None, sortby=None, limit=None, **kw):
         """
@@ -176,7 +232,11 @@ class ElasticSearchStorage(object):
             @param limit:   Number of records to return
         """
         result = None
-        args = dict(index=index or self.default_index, doc_type=doctype or self.default_doctype, _source_include=fields or '*')
+        args = dict(
+                index = index or self.default_index,
+                doc_type = doctype or self.default_doctype,
+                _source_include = fields or '*'
+            )
 
         if isinstance(query, dict):
             args['body'] = query
@@ -192,14 +252,27 @@ class ElasticSearchStorage(object):
 
         try:
             res = self.es.search(**args)
-            log.debug("ES select result for %r: %r" % (args['q'] or args['body'], res), level=8)
+            log.debug(
+                    "ES select result for %r: %r" % (
+                            args['q'] or args['body'],
+                            res
+                        ),
+                    level = 8
+                )
 
-        except elasticsearch.exceptions.NotFoundError, e:
-            log.debug("ES entry not found for %r: %r", args['q'] or args['body'], e)
+        except elasticsearch.exceptions.NotFoundError, errmsg:
+            log.debug(
+                    "ES entry not found for %r: %r" % (
+                            args['q'] or args['body'],
+                            errmsg
+                        ),
+                    level = 8
+                )
+
             res = None
 
-        except Exception, e:
-            log.warning("ES get exception: %r", e)
+        except Exception, errmsg:
+            log.warning("ES get exception: %r" % (errmsg))
             res = None
 
         if res is not None and res.has_key('hits'):
@@ -212,7 +285,8 @@ class ElasticSearchStorage(object):
 
     def _build_query(self, params, boolean='AND'):
         """
-            Convert the given list of query parameters into a Lucene query string
+            Convert the given list of query parameters into a Lucene
+            query string.
         """
         query = []
         for p in params:
@@ -258,7 +332,8 @@ class ElasticSearchStorage(object):
 
     def resolve_username(self, user, user_data=None, force=False):
         """
-            Resovle the given username to the corresponding nsuniqueid from LDAP
+            Resolve the given username to the corresponding nsuniqueid
+            from LDAP
         """
         if not '@' in user:
             return user
@@ -288,8 +363,16 @@ class ElasticSearchStorage(object):
             # insert a user record into our database
             del user_data['id']
             user_data['user'] = user
-            user_data['@timestamp'] = datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            self.set(user_id, user_data, index=self.users_index, doctype=self.users_doctype)
+            user_data['@timestamp'] = datetime.datetime.now(
+                    tzutc()
+                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+            self.set(
+                    user_id,
+                    user_data,
+                    index=self.users_index,
+                    doctype=self.users_doctype
+                )
 
         elif force:
             user_id = hashlib.md5(user).hexdigest()
@@ -304,8 +387,8 @@ class ElasticSearchStorage(object):
     def notificaton2folder(self, notification, attrib='uri'):
         """
             Turn the given notification record into a folder document.
-            including the computation of a unique identifier which is a checksum
-            of the (relevant) folder properties.
+            including the computation of a unique identifier which is a
+            checksum of the (relevant) folder properties.
         """
         # split the uri parameter into useful parts
         uri = parse_imap_uri(notification[attrib])
@@ -319,57 +402,91 @@ class ElasticSearchStorage(object):
         if not notification.has_key('metadata'):
             return False
 
-        if not notification.has_key('folder_uniqueid') and notification['metadata'].has_key('/shared/vendor/cmu/cyrus-imapd/uniqueid'):
+        if not notification.has_key('folder_uniqueid') and \
+                notification['metadata'].has_key(
+                        '/shared/vendor/cmu/cyrus-imapd/uniqueid'
+                    ):
+
             notification['folder_uniqueid'] = notification['metadata']['/shared/vendor/cmu/cyrus-imapd/uniqueid']
 
         if not notification.has_key('folder_uniqueid'):
-            notification['folder_uniqueid'] = hashlib.md5(notification[attrib]).hexdigest()
+            notification['folder_uniqueid'] = hashlib.md5(
+                    notification[attrib]
+                ).hexdigest()
 
         body = {
-            '@version': bonnie.API_VERSION,
-            '@timestamp': datetime.datetime.now(tzutc()).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'uniqueid': notification['folder_uniqueid'],
-            'metadata': notification['metadata'],
-            'acl': dict((self.resolve_username(k, force=True),v) for k,v in notification['acl'].iteritems()),
-            'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
-            'owner': uri['user'] + '@' + uri['domain'] if uri['user'] is not None else 'nobody',
-            'server': uri['host'],
-            'name': re.sub('@.+$', '', uri['path']),
-            'uri': folder_uri,
-        }
+                '@version': bonnie.API_VERSION,
+                '@timestamp': datetime.datetime.now(
+                        tzutc()
+                    ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+
+                'uniqueid': notification['folder_uniqueid'],
+                'metadata': notification['metadata'],
+                'acl': dict(
+                        (self.resolve_username(k, force=True),v) for k,v in notification['acl'].iteritems()
+                    ),
+
+                'type': notification['metadata']['/shared/vendor/kolab/folder-type'] if notification['metadata'].has_key('/shared/vendor/kolab/folder-type') else 'mail',
+
+                'owner': uri['user'] + '@' + uri['domain'] if uri['user'] is not None else 'nobody',
+                'server': uri['host'],
+                'name': re.sub('@.+$', '', uri['path']),
+                'uri': folder_uri,
+            }
 
         # compute folder object signature and the unique identifier
-        ignore_metadata = ['/shared/vendor/cmu/cyrus-imapd/lastupdate', '/shared/vendor/cmu/cyrus-imapd/pop3newuidl', '/shared/vendor/cmu/cyrus-imapd/size']
+        ignore_metadata = [
+                '/shared/vendor/cmu/cyrus-imapd/lastupdate',
+                '/shared/vendor/cmu/cyrus-imapd/pop3newuidl',
+                '/shared/vendor/cmu/cyrus-imapd/size'
+            ]
+
         signature = {
-            '@version': bonnie.API_VERSION,
-            'owner': body['owner'],
-            'server': body['server'],
-            'uniqueid': notification['folder_uniqueid'],
-            'metadata': [(k,v) for k,v in sorted(body['metadata'].iteritems()) if k not in ignore_metadata],
-            'acl': [(k,v) for k,v in sorted(body['acl'].iteritems())],
-        }
-        serialized = ";".join("%s:%s" % (k,v) for k,v in sorted(signature.iteritems()))
+                '@version': bonnie.API_VERSION,
+                'owner': body['owner'],
+                'server': body['server'],
+                'uniqueid': notification['folder_uniqueid'],
+                'metadata': [
+                        (k,v) for k,v in sorted(body['metadata'].iteritems()) if k not in ignore_metadata
+                    ],
+
+                'acl': [
+                        (k,v) for k,v in sorted(body['acl'].iteritems())
+                    ],
+            }
+
+        serialized = ";".join(
+                "%s:%s" % (k,v) for k,v in sorted(signature.iteritems())
+            )
+
         folder_id = hashlib.md5(serialized).hexdigest()
 
         return dict(id=folder_id, body=body)
 
-
     def resolve_folder_uri(self, notification, attrib='uri'):
         """
-            Resolve the folder uri (or folder_uniqueid) into an elasticsearch object ID
+            Resolve the folder uri (or folder_uniqueid) into an
+            elasticsearch object ID.
         """
         # no folder resolving required
-        if not notification.has_key(attrib) or notification.has_key('folder_id'):
+        if not notification.has_key(attrib) or \
+                notification.has_key('folder_id'):
+
             return (notification, [])
 
         now = int(time.time())
         base_uri = re.sub(';.+$', '', notification[attrib])
         jobs = []
 
-        log.debug("Resolve folder for %r = %r" % (attrib, base_uri), level=8)
+        log.debug(
+                "Resolve folder for %r = %r" % (attrib, base_uri),
+                level = 8
+            )
 
         # return id cached in memory
-        if not notification.has_key('metadata') and self.folder_id_cache.has_key(base_uri):
+        if not notification.has_key('metadata') and \
+                self.folder_id_cache.has_key(base_uri):
+
             notification['folder_id'] = self.folder_id_cache[base_uri]
             return (notification, [])
 
@@ -387,7 +504,8 @@ class ElasticSearchStorage(object):
         if len(jobs) > 0:
             return (notification, jobs)
 
-        # extract folder properties and a unique identifier from the notification
+        # extract folder properties and a unique identifier from the
+        # notification
         folder = self.notificaton2folder(notification)
 
         # abort if notificaton2folder() failed
@@ -404,38 +522,46 @@ class ElasticSearchStorage(object):
 
         # create an entry for the referenced imap folder
         if existing is None:
-            log.debug("Create folder object for: %r" % (folder['body']['uri']), level=8)
+            log.debug(
+                    "Create folder object for: %r" % (
+                            folder['body']['uri']
+                        ),
+                    level = 8
+                )
 
             ret = self.set(
-                index=self.folders_index,
-                doctype=self.folders_doctype,
-                key=folder['id'],
-                value=folder['body']
-            )
+                    index = self.folders_index,
+                    doctype = self.folders_doctype,
+                    key = folder['id'],
+                    value = folder['body']
+                )
+
             if ret is None:
                 folder = None
 
         # update entry if name changed
         elif folder['body']['uniqueid'] == existing['uniqueid'] and \
-            not folder['body']['name'] == existing['name']:
+                not folder['body']['name'] == existing['name']:
+
             try:
                 ret = self.es.update(
-                    index=self.folders_index,
-                    doc_type=self.folders_doctype,
-                    id=folder['id'],
-                    body={ 'doc': {
-                            'name': folder['body']['name'],
-                            'uri': folder['body']['uri']
-                        }
-                    },
-                    consistency='one',
-                    replication='async'
-                )
+                        index = self.folders_index,
+                        doc_type = self.folders_doctype,
+                        id = folder['id'],
+                        body = {
+                                'doc': {
+                                        'name': folder['body']['name'],
+                                        'uri': folder['body']['uri']
+                                    }
+                            },
+                        consistency = 'one',
+                        replication = 'async'
+                    )
+
                 log.debug("Updated folder object: %r" % (ret), level=8)
 
-            except Exception, e:
-                log.warning("ES update exception: %r", e)
-
+            except Exception, errmsg:
+                log.warning("ES update exception: %r" % (errmsg))
 
         # add reference to internal folder_id
         if folder is not None:
