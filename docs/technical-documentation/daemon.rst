@@ -1,0 +1,5 @@
+======
+Daemon
+======
+
+.. automodule:: bonnie.daemon
