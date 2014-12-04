@@ -2,19 +2,20 @@
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
 # Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later version
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Library General Public License for more details.
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 """
@@ -27,11 +28,11 @@ class MessageAppendHandler(MessageHandlerBase):
     event = 'MessageAppend'
 
     def __init__(self, *args, **kw):
-        MessageHandlerBase.__init__(self, *args, **kw)
+        super(MessageAppendHandler, self).__init__(*args, **kw)
 
     def run(self, notification):
         # call super for some basic notification processing
-        (notification, jobs) = super(MessageHandlerBase, self).run(notification)
+        (notification, jobs) = super(MessageAppendHandler, self).run(notification)
 
         if not notification.has_key('messageContent') or notification['messageContent'] in [None, ""]:
             self.log.debug("Adding FETCH job for " + self.event, level=8)

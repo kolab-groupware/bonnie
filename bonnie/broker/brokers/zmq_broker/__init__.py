@@ -2,27 +2,30 @@
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
 # Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later
-# version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-# USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 """
     This is the ZMQ broker implementation for Bonnie.
 """
 
+import datetime
+from dateutil.parser import parse
+from dateutil.tz import tzutc
+import json
 from multiprocessing import Process
 import os
 import random
@@ -37,6 +40,8 @@ from zmq.eventloop import ioloop, zmqstream
 import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.broker.ZMQBroker')
+
+from bonnie.broker.state import init_db
 
 import collector
 import job
@@ -54,7 +59,8 @@ class ZMQBroker(object):
 
         self.routers = {}
         self.router_processes = {}
-        self.collector_interests = []
+
+        self.collector_jobs_pending = 0
 
     def register(self, callback):
         callback({ '_all': self.run })
@@ -138,17 +144,29 @@ class ZMQBroker(object):
         self.running = True
         last_expire = time.time()
         last_state = time.time()
+        last_vacuum = time.time()
+
+        try:
+            db = init_db('broker')
+            db.execute("VACUUM")
+            db.commit()
+        except Exception, errmsg:
+            pass
+
         poller_timeout = int(conf.get('broker', 'zmq_poller_timeout', 100))
 
         while self.running:
             try:
-                # TODO: adjust polling timout according to the number of pending jobs
+                # TODO: adjust polling timout according to the number
+                # of pending jobs.
                 sockets = dict(self.poller.poll(poller_timeout))
-            except KeyboardInterrupt, e:
+
+            except KeyboardInterrupt, errmsg:
                 log.info("zmq.Poller KeyboardInterrupt")
                 break
-            except Exception, e:
-                log.error("zmq.Poller error: %r", e)
+
+            except Exception, errmsg:
+                log.error("zmq.Poller error: %r", errmsg)
                 sockets = dict()
 
             for socket, event in sockets.iteritems():
@@ -159,12 +177,8 @@ class ZMQBroker(object):
                         result = getattr(router, '%s' % callforward)()
                         callback(router, result)
 
-            for _collector in collector.select_by_state(b'READY'):
-                self._send_collector_job(_collector.identity)
-
-            for _worker in worker.select_by_state(b'READY'):
-                self._send_worker_job(_worker.identity)
-
+            # Once every 30 seconds, expire stale collectors and
+            # workers, unlock jobs and expire those done.
             if last_expire < (time.time() - 30):
                 for _collector in collector.select_by_state(b'READY'):
                     self._request_collector_state(_collector.identity)
@@ -173,49 +187,13 @@ class ZMQBroker(object):
                 worker.expire()
                 job.unlock()
                 job.expire()
+
                 last_expire = time.time()
 
-            if last_state < (time.time() - 10):
-                stats_start = time.time()
-                jcp = job.count_by_type_and_state('collector', b'PENDING')
-                jwp = job.count_by_type_and_state('worker', b'PENDING')
-                jca = job.count_by_type_and_state('collector', b'ALLOC')
-                jwa = job.count_by_type_and_state('worker', b'ALLOC')
-
-                stats = {
-                        'cb': collector.count_by_state(b'BUSY'),
-                        'cr': collector.count_by_state(b'READY'),
-                        'cs': collector.count_by_state(b'STALE'),
-                        'ja': sum([jca, jwa]),
-                        'jca': jca,
-                        'jcp': jcp,
-                        'jd': job.count_by_state(b'DONE'),
-                        'jp': sum([jcp, jwp]),
-                        'jwa': jwa,
-                        'jwp': jwp,
-                        'jf': job.count_by_state(b'FAILED'),
-                        'jo': job.count_by_state(b'POSTPONED'),
-                        'wb': worker.count_by_state(b'BUSY'),
-                        'wr': worker.count_by_state(b'READY'),
-                        'ws': worker.count_by_state(b'STALE'),
-                    }
-                stats_end = time.time()
-
-                stats['duration'] = "%.4f" % (stats_end - stats_start)
-
-                log.info("""
-    Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d,
-                postponed=%(jo)d, failed=%(jf)d.
-    Workers:    ready=%(wr)d, busy=%(wb)d, stale=%(ws)d,
-                pending=%(jwp)d, alloc=%(jwa)d.
-    Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
-                pending=%(jcp)d, alloc=%(jca)d.
-    Took:       seconds=%(duration)s.""" % stats)
-
-                self._write_stats(stats)
-
+            # Report on the state of jobs.
+            if last_state < (time.time() - 30):
+                self._write_stats()
                 last_state = time.time()
-
 
         log.info("Shutting down")
 
@@ -237,6 +215,7 @@ class ZMQBroker(object):
 
         if not hasattr(self, '_handle_cr_%s' % (cmd)):
             log.error("Unhandled CR cmd %s" % (cmd))
+            return
 
         handler = getattr(self, '_handle_cr_%s' % (cmd))
         handler(router, collector_identity, message[2:])
@@ -250,9 +229,23 @@ class ZMQBroker(object):
         log.debug("Dealer Router Message: %r" % (message), level=8)
         dealer_identity = message[0]
         notification = message[1]
+
+        done = False
+        attempts = 0
+        while not done:
+            attempts += 1
+            try:
+                _job = job.add(dealer_identity, notification)
+                if not _job == None:
+                    done = True
+            except Exception, errmsg:
+                if attempts % 10 == 0:
+                    log.error("Dealer Router cannot add jobs: %r" % (errmsg))
+
         stream.send_multipart([dealer_identity, b'ACK'])
 
-        job.add(dealer_identity, notification)
+        if not _job == None:
+            log.info("Job %s NEW by %s" % (_job.uuid, dealer_identity))
 
     def _cb_wr_recv_multipart(self, router, message):
         log.debug("Worker Router Message: %r" % (message), level=8)
@@ -269,23 +262,15 @@ class ZMQBroker(object):
     def _cb_wcr_recv_multipart(self, router, message):
         log.debug("Worker Controller Router Message: %r" % (message), level=8)
         worker_identity = message[0]
-        commands = message[1].split(" ")
+        cmd = message[1]
 
-        # check for aggregated collector commands
-        collector_commands = [c for c in commands if c in self.collector_interests]
+        if not hasattr(self, '_handle_wcr_%s' % (cmd)):
+            log.error("Unknown WCR cmd %s for job %s" % (cmd, message[2]))
+            self._handle_wcr_UNKNOWN(router, worker_identity, message[2:])
+            return
 
-        if len(collector_commands) == len(commands):
-            self._handle_wcr_COLLECT(router, worker_identity, message[1], message[2:])
-        else:
-            cmd = message[1]
-
-            if not hasattr(self, '_handle_wcr_%s' % (cmd)):
-                log.error("Unknown WCR cmd %s for job %s" % (cmd, message[2]))
-                self._handle_wcr_UNKNOWN(router, worker_identity, message[2:])
-                return
-
-            handler = getattr(self, '_handle_wcr_%s' % (cmd))
-            handler(router, worker_identity, message[2:])
+        handler = getattr(self, '_handle_wcr_%s' % (cmd))
+        handler(router, worker_identity, message[2:])
 
     ##
     ## Collector Router command functions
@@ -331,12 +316,6 @@ class ZMQBroker(object):
         state = message[0]
         interests = message[1].split(" ")
 
-        # register the reported interests
-        if len(interests) > 0:
-            _interests = list(interests)
-            _interests.extend(self.collector_interests)
-            self.collector_interests = list(set(_interests))
-
         collector.set_state(identity, state, interests)
 
         if state == b'READY':
@@ -363,23 +342,20 @@ class ZMQBroker(object):
 
         self._send_worker_job(identity)
 
-    def _handle_wcr_COLLECT(self, router, identity, commands, message):
-        log.debug("Handing COLLECT for identity %s (commands: %r, message: %r)" % (identity, commands, message), level=7)
-        job_uuid = message[0]
-        log.info("Job %s COLLECT (%r) by %s" % (job_uuid, commands, identity))
+    def _handle_wcr_COLLECT(self, router, identity, message):
+        log.debug("Handing COLLECT for identity %s (message: %r)" % (identity, message[:-1]), level=7)
+        commands = message[0]
+        job_uuid = message[1]
+        notification = message[2]
 
-        updates = dict(
-                cmd = commands,
-                state = b'PENDING',
-                job_type = 'collector'
-            )
-
-        if len(message) > 1:
-            updates['notification'] = message[1]
+        log.info("Job %s COLLECT by %s" % (job_uuid, identity))
 
         job.update(
                 job_uuid,
-                **updates
+                cmd = commands,
+                state = b'PENDING',
+                job_type = 'collector',
+                notification = notification
             )
 
         worker.update(
@@ -493,21 +469,18 @@ class ZMQBroker(object):
             log.info("ioloop.IOLoop KeyboardInterrupt")
         except Exception, e:
             log.error("ioloop.IOLoop error: %r", e)
-
+        finally:
+            ioloop.IOLoop.instance().stop()
 
     def _send_collector_job(self, identity):
         _job = job.select_for_collector(identity)
 
         if _job == None:
+            #log.info("No jobs for collector %s" % (identity))
             return
 
-        collector.update(
-                identity,
-                state = b'BUSY',
-                job = _job.id
-            )
-
-        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+        log.info("Job %s ALLOC to %s" % (_job.uuid, identity))
+        #log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
 
         self.routers['collector']['router'].send_multipart(
                 [
@@ -522,15 +495,11 @@ class ZMQBroker(object):
         _job = job.select_for_worker(identity)
 
         if _job == None:
+            #log.info("No jobs for worker %s" % (identity))
             return
 
-        worker.update(
-                identity,
-                state = b'BUSY',
-                job = _job.id
-            )
-
-        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+        log.info("Job %s ALLOC to %s" % (_job.uuid, identity))
+        #log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
 
         self.routers['worker_controller']['router'].send_multipart(
                 [
@@ -540,34 +509,101 @@ class ZMQBroker(object):
                     ]
             )
 
-    def _write_stats(self, stats):
-        if os.access("/var/lib/bonnie/state.state", os.W_OK):
-            try:
-                fp = open("/var/lib/bonnie/state.stats", "w")
-                fp.write("""# Source this file in your script
-jobs_done=%(jd)d
-jobs_pending=%(jp)d
-jobs_alloc=%(ja)d
-jobs_orphaned=%(jo)d
-workers_ready=%(wr)d
-workers_busy=%(wb)d
-workers_stale=%(ws)d
-collectors_ready=%(cr)d
-collectors_busy=%(cb)d
-collectors_stale=%(cs)d
-collector_jobs_pending=%(jcp)d
-collector_jobs_alloc=%(jcp)d
-worker_jobs_pending=%(jwp)d
-worker_jobs_alloc=%(jwa)d
-""" % stats)
-                fp.close()
+    def _write_stats(self):
+        job_retention = (int)(conf.get(
+                "broker",
+                "job_retention",
+                300
+            ))
 
-            except Exception, errmsg:
-                log.error(
-                        "An error occurred writing out the stats file:\n%s" % (
-                                errmsg
-                            )
-                    )
+        stats_start = time.time()
+
+        jcp = job.count_by_type_and_state('collector', b'PENDING')
+        jwp = job.count_by_type_and_state('worker', b'PENDING')
+        jca = job.count_by_type_and_state('collector', b'ALLOC')
+        jwa = job.count_by_type_and_state('worker', b'ALLOC')
+
+        _job = job.first()
+
+        if _job == None:
+            jt = 0
+        else:
+            _job_notification = json.loads(_job.notification)
+            _job_timestamp = parse(_job_notification['timestamp']).astimezone(tzutc())
+            now = parse(
+                    datetime.datetime.strftime(
+                            datetime.datetime.utcnow(),
+                            "%Y-%m-%dT%H:%M:%S.%fZ"
+                        )
+                ).astimezone(tzutc())
+
+            delta = now - _job_timestamp
+            if hasattr(delta, 'total_seconds'):
+                seconds = delta.total_seconds()
+            else:
+                seconds = (delta.days * 24 * 3600) + delta.seconds
+
+            jt = round(seconds, 0)
+
+        stats = {
+                'cb': collector.count_by_state(b'BUSY'),
+                'cr': collector.count_by_state(b'READY'),
+                'cs': collector.count_by_state(b'STALE'),
+                'ja': sum([jca, jwa]),
+                'jca': jca,
+                'jcp': jcp,
+                'jd': job.count_by_state(b'DONE'),
+                'jf': job.count_by_state(b'FAILED'),
+                'jo': job.count_by_state(b'POSTPONED'),
+                'jp': sum([jcp, jwp]),
+                'jr': job_retention,
+                'jt': jt,
+                'jwa': jwa,
+                'jwp': jwp,
+                'wb': worker.count_by_state(b'BUSY'),
+                'wr': worker.count_by_state(b'READY'),
+                'ws': worker.count_by_state(b'STALE'),
+            }
+
+        stats_end = time.time()
+
+        stats['duration'] = "%.4f" % (stats_end - stats_start)
+
+        self._write_stats_file(stats)
+        self._write_stats_log(stats)
+
+    def _write_stats_file(self, stats):
+        fp = open("/var/lib/bonnie/state.stats", "w")
+        fp.write("""# Source this file in your script
+                job_retention=%(jr)d
+                jobs_done=%(jd)d
+                jobs_pending=%(jp)d
+                jobs_alloc=%(ja)d
+                jobs_postponed=%(jo)d
+                jobs_failed=%(jf)d
+                jobs_lag=%(jt)d
+                workers_ready=%(wr)d
+                workers_busy=%(wb)d
+                workers_stale=%(ws)d
+                collectors_ready=%(cr)d
+                collectors_busy=%(cb)d
+                collectors_stale=%(cs)d
+                collector_jobs_pending=%(jcp)d
+                collector_jobs_alloc=%(jca)d
+                worker_jobs_pending=%(jwp)d
+                worker_jobs_alloc=%(jwa)d
+                """.replace('    ', '') % (stats))
+        fp.close()
+
+    def _write_stats_log(self, stats):
+        log.info("""
+            Jobs:       done=%(jd)d, pending=%(jp)d, alloc=%(ja)d,
+                        postponed=%(jo)d, failed=%(jf)d.
+            Workers:    ready=%(wr)d, busy=%(wb)d, stale=%(ws)d,
+                        pending=%(jwp)d, alloc=%(jwa)d.
+            Collectors: ready=%(cr)d, busy=%(cb)d, stale=%(cs)d,
+                        pending=%(jcp)d, alloc=%(jca)d.
+            Took:       seconds=%(duration)s.""" % stats)
 
     def _request_collector_state(self, identity):
         log.debug("Requesting state from %s" % (identity), level=7)

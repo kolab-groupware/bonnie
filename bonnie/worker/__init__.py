@@ -1,23 +1,21 @@
 # -*- coding: utf-8 -*-
-#
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
 # Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later
-# version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Library General Public License for more details.
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-# USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 import json
@@ -37,6 +35,11 @@ conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie.worker')
 
 class BonnieWorker(BonnieDaemon):
+    """
+        Bonnie Worker specific version of a :class:`Bonnie Daemon <bonnie.daemon.BonnieDaemon>`
+    """
+
+    #: The process ID file to use.
     pidfile = "/var/run/bonnie/worker.pid"
 
     def __init__(self, *args, **kw):
@@ -59,7 +62,9 @@ class BonnieWorker(BonnieDaemon):
 
     def run(self):
         """
-            Daemon main loop
+            The Bonnie worker main loop, responsible for creating
+            :class:`worker processes
+            <bonnie.worker.BonnieWorkerProcess>`
         """
         num_childs = conf.num_childs or conf.get('worker', 'num_childs')
         if num_childs is not None:
@@ -93,11 +98,15 @@ class BonnieWorker(BonnieDaemon):
 
     def run_child(self):
         """
-            This method is being run in a separate process
+            Target method for :class:`worker processes
+            <bonnie.worker.BonnieWorkerProcess>`
         """
         BonnieWorkerProcess(as_child=True).run()
 
     def terminate(self, *args, **kw):
+        """
+            Stop the worker daemon.
+        """
         self.running = False
         for p in self.childs:
             p.terminate()
@@ -106,16 +115,26 @@ class BonnieWorker(BonnieDaemon):
             for p in self.childs:
                 p.join()
 
-
 class BonnieWorkerProcess(object):
+    #: Holder of interests registered by handlers
     handler_interests = { '_all': [] }
+
+    #: Holder of interests registered by input channel modules
     input_interests = {}
+
+    #: Holder of interests registered by storage channel modules
     storage_interests = {}
+
+    #: Holder of interests registered by output channel modules
     output_interests = {}
 
+    #: Lists registered handler modules
     handler_modules = {}
+    #: Lists registered input modules
     input_modules = {}
+    #: Lists registered storage modules
     storage_modules = {}
+    #: Lists registered output modules
     output_modules = {}
 
     output_exclude_events = []
@@ -169,19 +188,97 @@ class BonnieWorkerProcess(object):
 
         if self.handler_interests.has_key(event):
             for interest in self.handler_interests[event]:
-                (notification, _jobs) = self.interest_callback(interest, notification)
-                jobs.extend(_jobs)
+                (notification, _jobs) = self.interest_callback(
+                        interest,
+                        notification
+                    )
+
+                if len(_jobs) > 0:
+                    log.debug(
+                            "Handler interest %r for event %s returns jobs: %r" % (
+                                    interest,
+                                    event,
+                                    _jobs
+                                ),
+                            level = 6
+                        )
+
+                    jobs.extend(_jobs)
 
         for interest in self.handler_interests['_all']:
-            (notification, _jobs) = self.interest_callback(interest, notification)
-            jobs.extend(_jobs)
+            (notification, _jobs) = self.interest_callback(
+                    interest,
+                    notification
+                )
 
-        # trigger storage modules which registered interest in particular notification properties
+            if len(_jobs) > 0:
+                log.debug(
+                        "Handler interest %r for _all returns jobs: %r" % (
+                                interest,
+                                _jobs
+                            ),
+                        level = 6
+                    )
+
+                jobs.extend(_jobs)
+
+        jobs = list(set(jobs))
+
+        if len(jobs) > 0:
+            log.debug(
+                    "Handler interests included jobs: %r" % (jobs),
+                    level = 6
+                )
+
+        handler_jobs_num = len(jobs)
+
+        # trigger storage modules which registered interest in
+        # particular notification properties.
         for prop,storage_interests in self.storage_interests.iteritems():
             if notification.has_key(prop):
                 for interest in storage_interests:
-                    (notification, _jobs) = self.interest_callback(interest, notification)
-                    jobs.extend(_jobs)
+                    log.debug(
+                            "Storage interest %s for property %s to be executed" % (
+                                    interest,
+                                    prop
+                                ),
+                            level = 6
+                        )
+
+                    (notification, _jobs) = self.interest_callback(
+                            interest,
+                            notification
+                        )
+
+                    if len(_jobs) > 0:
+                        log.debug(
+                                "Storage interest %r for %r returns jobs: %r" % (
+                                        interest,
+                                        prop,
+                                        _jobs
+                                    ),
+                                level = 6
+                            )
+
+                        jobs.extend(_jobs)
+
+            else:
+                log.debug(
+                        "Storage interests for property %s not (yet) relevant" % (
+                                prop
+                            ),
+                        level = 6
+                    )
+
+        jobs = list(set(jobs))
+
+        if len(jobs) > handler_jobs_num:
+            log.debug(
+                    "Storage interests included additional jobs: %r" % (
+                            jobs
+                        ),
+                    level = 6
+                )
 
         # finally send notification to output handlers if no jobs remaining
         if len(jobs) == 0 and not notification.has_key('_suppress_output') and not event in self.output_exclude_events:
@@ -212,9 +309,9 @@ class BonnieWorkerProcess(object):
             if hasattr(_storage, 'report'):
                 _storage.report()
 
-        for _storage in self.storage_modules.values():
-            if hasattr(_storage, 'report'):
-                _storage.report()
+        for _output in self.output_modules.values():
+            if hasattr(_output, 'report'):
+                _output.report()
 
     def interest_callback(self, interest, notification):
         """
@@ -229,12 +326,13 @@ class BonnieWorkerProcess(object):
             A handler registers itself with a set of interests, based on
             the event notification type.
 
-            For example, for a handler to subscribe to a 'MessageAppend'
+            For example, for a handler to subscribe to a *MessageAppend*
             event notification type, it would register itself with the
-            following interests, provided it wants its method 'run' to
-            be executed:
+            following interests, provided it wants its method ``run`` to
+            be executed::
 
                 { 'MessageAppend': { 'callback': self.run } }
+
         """
         for interest,how in interests.iteritems():
             if not self.handler_interests.has_key(interest):
@@ -244,11 +342,14 @@ class BonnieWorkerProcess(object):
 
         return self
 
-    def register_input(self, interests):
+    def register_input(self, interests={}):
         self.input_interests = interests
         return self
 
-    def register_output(self, interests):
+    def register_output(self, interests={}):
+        """
+            Output channel module registration.
+        """
         for interest,how in interests.iteritems():
             if not self.output_interests.has_key(interest):
                 self.output_interests[interest] = []
@@ -257,7 +358,10 @@ class BonnieWorkerProcess(object):
 
         return self
 
-    def register_storage(self, interests):
+    def register_storage(self, interests={}):
+        """
+            Storage channel module registration.
+        """
         for interest,how in interests.iteritems():
             if not self.storage_interests.has_key(interest):
                 self.storage_interests[interest] = []
@@ -267,7 +371,13 @@ class BonnieWorkerProcess(object):
         return self
 
     def run(self):
-        input_modules = conf.get('worker', 'input_modules').split(',')
+        input_modules = conf.get('worker', 'input_modules')
+        if input_modules == None:
+            log.error("No input modules configured for worker")
+            return
+
+        input_modules = [x.strip() for x in input_modules.split(',')]
+
         for _input in self.input_modules.values():
             if _input.name() in input_modules:
                 _input.run(callback=self.event_notification, report=self.input_report)

@@ -1,23 +1,21 @@
 # -*- coding: utf-8 -*-
-#
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
 # Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later
-# version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Library General Public License for more details.
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-# USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 """
@@ -83,22 +81,22 @@ class ZMQInput(object):
             Receive a message on the Collector Router.
         """
         log.debug("Collector Router Message: %r" % (message), level=8)
-        collector_identity = message[0]
+        cmd = message[0]
 
-        if message[0] == b"STATE" or not self.state == b"READY":
+        if cmd == b"STATE":
             self.report_state()
         else:
             job_uuid = message[1]
             notification = message[2]
 
             if not self.notify_callback == None:
-                self.notify_callback(message[0], job_uuid, notification)
+                self.notify_callback(cmd, job_uuid, notification)
 
     def callback_done(self, job_uuid, result):
         log.debug("Handler callback done for job %s: %r" % (job_uuid, result), level=8)
         self.report_timestamp = time.time()
         self.collector.send_multipart([b"DONE", job_uuid, result])
-        log.debug("Handler results sent for job %s" % (job_uuid), level=7)
+        log.info("Job %s DONE by %s" % (job_uuid, self.identity))
 
     def terminate(self):
         log.info("[%s] shutting down", self.identity)

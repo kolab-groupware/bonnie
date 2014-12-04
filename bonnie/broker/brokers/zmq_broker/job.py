@@ -2,27 +2,27 @@
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
 # Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later
-# version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-# USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 import datetime
 import time
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError
 
 import bonnie
 conf = bonnie.getConf()
@@ -37,11 +37,26 @@ def add(dealer, notification, job_type='worker'):
         Add a new job.
     """
     db = init_db('jobs')
+
+    if db == None:
+        return None
+
+    job = None
+
     try:
-        db.add(Job(dealer, notification, job_type))
+        job = Job(dealer, notification, job_type)
+        db.add(job)
         db.commit()
     except IntegrityError, errmsg:
+        log.error("SQLAlchemy Integrity Error: %r" % (errmsg))
         db.rollback()
+        return None
+    except OperationalError, errmsg:
+        log.error("SQLAlchemy Operational Error: %r" % (errmsg))
+        db.rollback()
+        return None
+
+    return job
 
 def count():
     db = init_db('jobs')
@@ -61,6 +76,11 @@ def count_by_type(job_type):
 def count_by_type_and_state(job_type, state):
     db = init_db('jobs')
     result = db.query(Job).filter_by(job_type=job_type, state=state).count()
+    return result
+
+def first():
+    db = init_db('jobs')
+    result = db.query(Job).filter(Job.state != b'DONE').order_by(Job.id).first()
     return result
 
 def select(job_uuid):
@@ -104,12 +124,16 @@ def select_for_collector(identity):
 
     # This results in following the storage order and is by far the
     # fastest methodology.
-    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').first()
+    job = db.query(Job).filter_by(collector=identity, job_type='collector', state=b'PENDING').order_by(Job.id).first()
 
-    if not job == None:
-        job.state = b'ALLOC'
-        job.timestamp = datetime.datetime.utcnow()
-        db.commit()
+    if job == None:
+        return
+
+    job.state = b'ALLOC'
+    job.timestamp = datetime.datetime.utcnow()
+    collector.job = job.id
+    collector.state = b'BUSY'
+    db.commit()
 
     return job
 
@@ -134,12 +158,15 @@ def select_for_worker(identity):
 
     # This results in following the storage order and is by far the
     # fastest methodology.
-    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').first()
+    job = db.query(Job).filter_by(job_type='worker', state=b'PENDING').order_by(Job.id).first()
 
-    if not job == None:
-        job.state = b'ALLOC'
-        job.timestamp = datetime.datetime.utcnow()
-        db.commit()
+    if job == None:
+        return
+
+    job.state = b'ALLOC'
+    worker.job = job.id
+    worker.state = b'BUSY'
+    db.commit()
 
     return job
 
@@ -178,7 +205,9 @@ def expire():
     """
     db = init_db('jobs')
 
-    for job in db.query(Job).filter(Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 300)), Job.state == b'DONE').all():
+    job_retention = (int)(conf.get("broker", "job_retention", 300))
+
+    for job in db.query(Job).filter(Job.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, job_retention)), Job.state == b'DONE').all():
         log.debug("Purging job %s" % (job.uuid), level=7)
         db.delete(job)
 

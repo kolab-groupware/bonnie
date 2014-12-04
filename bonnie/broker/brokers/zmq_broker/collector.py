@@ -98,6 +98,11 @@ def update(identity, **kw):
 
     collector = db.query(Collector).filter_by(identity=identity).first()
 
+    if collector == None:
+        db.add(Collector(identity))
+        db.commit()
+        collector = db.query(Collector).filter_by(identity=identity).first()
+
     for attr, value in kw.iteritems():
         setattr(collector, attr, value)
 

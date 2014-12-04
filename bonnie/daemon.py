@@ -1,22 +1,21 @@
 # -*- coding: utf-8 -*-
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
-# Thomas Bruederli <bruederli at kolabsys.com>
+# Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later
-# version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful, but
-# WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Library General Public License for more details.
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-# USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 import os
@@ -25,11 +24,22 @@ import grp
 import pwd
 import signal
 import traceback
+
 import bonnie
 conf = bonnie.getConf()
 log = bonnie.getLogger('bonnie')
 
 class BonnieDaemon(object):
+    """
+        A standard daemon process abstraction layer for Bonnie.
+
+        This class provides the following capabilities for Bonnie
+        daemons (through inheritance):
+
+        *   standard command-line options
+        *   :func:`dropping privileges <drop_privileges>`
+        *   :func:`signal handling <signal_handlers>`
+    """
     pidfile = "/var/run/bonnie/bonnie.pid"
 
     def __init__(self, *args, **kw):
@@ -76,7 +86,8 @@ class BonnieDaemon(object):
 
     def run(self, *args, **kw):
         """
-            The daemon main loop
+            The daemon main loop. Override this function in a
+            :class:`BonnieDaemon` sub-class.
         """
         pass
 
@@ -224,7 +235,7 @@ def daemonize():
     """
         This forks the current process into a daemon.
     """
-    # do the UNIX double-fork magic, see Stevens' "Advanced 
+    # do the UNIX double-fork magic, see Stevens' "Advanced
     # Programming in the UNIX Environment" for details (ISBN 0201563177)
     try:
         pid = os.fork()
