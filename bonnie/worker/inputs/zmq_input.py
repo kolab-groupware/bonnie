@@ -1,23 +1,21 @@
 # -*- coding: utf-8 -*-
-#
 # Copyright 2010-2014 Kolab Systems AG (http://www.kolabsys.com)
 #
 # Jeroen van Meeuwen (Kolab Systems) <vanmeeuwen a kolabsys.com>
+# Thomas Bruederli (Kolab Systems) <bruederli a kolabsys.com>
 #
-# This program is free software; you can redistribute it and/or modify
+# This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; version 3 or, at your option, any later
-# version.
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Library General Public License for more details.
+# GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
-# USA.
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
 """
@@ -27,6 +25,7 @@
 """
 
 import os
+import random
 import socket
 import time
 import zmq
@@ -43,6 +42,7 @@ class ZMQInput(object):
         self.job_uuid = None
         self.lastping = 0
         self.report_timestamp = 0
+        self.busy_start = 0
 
     def name(self):
         return 'zmq_input'
@@ -51,6 +51,9 @@ class ZMQInput(object):
         pass
 
     def report_state(self):
+        if self.busy_start < (time.time() - 90):
+            self.set_state_ready()
+
         log.debug("[%s] reporting state: %s" % (self.identity, self.state), level=8)
         message = [b"STATE", self.state]
 
@@ -106,7 +109,7 @@ class ZMQInput(object):
 
             now = time.time()
 
-            if self.report_timestamp < (now - 60):
+            if self.report_timestamp < (time.time() - 10):
                 self.report_state()
 
             if self.controller in sockets:
@@ -145,11 +148,15 @@ class ZMQInput(object):
                             self.controller.send_multipart([b"DONE", self.job_uuid])
                         else:
                             log.debug("[%s] Has jobs: %r" % (self.identity, jobs), level=8)
-                            self.controller.send_multipart([b'COLLECT', b" ".join(jobs), self.job_uuid, notification])
+
+                            if b'POSTPONE' in jobs:
+                                self.controller.send_multipart([b'POSTPONE', self.job_uuid])
+                            else:
+                                self.controller.send_multipart([b'COLLECT', b" ".join(jobs), self.job_uuid, notification])
 
                         self.set_state_ready()
 
-            if report is not None and self.lastping < (now - 60):
+            if report is not None and self.lastping < (now - random.randint(55,65)):
                 report()
                 self.lastping = now
 
@@ -159,6 +166,7 @@ class ZMQInput(object):
     def set_state_busy(self, _job_id):
         log.debug("[%s] Set state to BUSY" % (self.identity), level=9)
         self.report_timestamp = time.time()
+        self.busy_start = time.time()
         self.state = b"BUSY"
         self.job_uuid = _job_id
 
