@@ -180,9 +180,6 @@ class ZMQBroker(object):
             # Once every 30 seconds, expire stale collectors and
             # workers, unlock jobs and expire those done.
             if last_expire < (time.time() - 30):
-                for _collector in collector.select_by_state(b'READY'):
-                    self._request_collector_state(_collector.identity)
-
                 collector.expire()
                 worker.expire()
                 job.unlock()
@@ -476,11 +473,9 @@ class ZMQBroker(object):
         _job = job.select_for_collector(identity)
 
         if _job == None:
-            #log.info("No jobs for collector %s" % (identity))
             return
 
-        log.info("Job %s ALLOC to %s" % (_job.uuid, identity))
-        #log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
 
         self.routers['collector']['router'].send_multipart(
                 [
@@ -495,11 +490,9 @@ class ZMQBroker(object):
         _job = job.select_for_worker(identity)
 
         if _job == None:
-            #log.info("No jobs for worker %s" % (identity))
             return
 
-        log.info("Job %s ALLOC to %s" % (_job.uuid, identity))
-        #log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
+        log.debug("Sending %s to %s" % (_job.uuid, identity), level=7)
 
         self.routers['worker_controller']['router'].send_multipart(
                 [

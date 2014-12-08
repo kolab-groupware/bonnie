@@ -113,22 +113,18 @@ def expire():
 
     for collector in db.query(Collector).filter(Collector.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 90)), Collector.state == b'STALE').all():
         log.debug("Purging collector %s as very stale" % (collector.identity), level=7)
-        if not collector.job == None:
-            _job = db.query(Job).filter_by(id=collector.job).first()
-            if not _job == None:
-                _job.state = b'PENDING'
-                _job.timestamp = datetime.datetime.utcnow()
+        for _job in db.query(Job).filter_by(collector=collector.identity).all():
+            _job.state = b'PENDING'
+            _job.timestamp = datetime.datetime.utcnow()
 
         db.delete(collector)
         db.commit()
 
     for collector in db.query(Collector).filter(Collector.timestamp <= (datetime.datetime.utcnow() - datetime.timedelta(0, 90)), Collector.state != b'STALE').all():
         log.debug("Marking collector %s as stale" % (collector.identity), level=7)
-        if not collector.job == None:
-            _job = db.query(Job).filter_by(id=collector.job).first()
-            if not _job == None:
-                _job.state = b'PENDING'
-                _job.timestamp = datetime.datetime.utcnow()
+        for _job in db.query(Job).filter_by(collector=collector.identity).all():
+            _job.state = b'PENDING'
+            _job.timestamp = datetime.datetime.utcnow()
 
         collector.state = b'STALE'
         collector.timestamp = datetime.datetime.utcnow()

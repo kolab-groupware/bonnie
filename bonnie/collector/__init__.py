@@ -43,41 +43,30 @@ class BonnieCollector(BonnieDaemon):
 
         self.handler_interests = {}
 
-        num_threads = int(conf.get('collector', 'num_threads', 5))
+        self.num_threads = int(conf.get('collector', 'num_threads', 5))
+        self.num_threads_busy = 0
 
         if version.StrictVersion(sys.version[:3]) >= version.StrictVersion("2.7"):
-            self.pool = multiprocessing.Pool(num_threads, self._worker_process_start, (), 1)
+            self.pool = multiprocessing.Pool(self.num_threads, self._worker_process_start, (), 1)
         else:
-            self.pool = multiprocessing.Pool(num_threads, self._worker_process_start, ())
-
-    def _worker_process_start(self, *args, **kw):
-        log.debug("Worker process %s initializing" % (multiprocessing.current_process().name), level=1)
+            self.pool = multiprocessing.Pool(self.num_threads, self._worker_process_start, ())
 
     def execute(self, commands, job_uuid, notification):
         """
             Dispatch collector job to the according handler(s)
         """
-        log.debug("Executing collection for %s" % (commands), level=8)
+        self.num_threads_busy += 1
 
         # execute this asynchronously in a child process
         self.pool.apply_async(
-            async_execute_handlers,
-            (
-                commands.split(),
-                notification,
-                job_uuid
-            ),
-            callback = self._execute_callback
-        )
-
-    def _execute_callback(self, result):
-        (notification, job_uuid) = result
-
-        # pass result back to input module(s)
-        input_modules = conf.get('collector', 'input_modules').split(',')
-        for _input in self.input_modules.values():
-            if _input.name() in input_modules:
-                _input.callback_done(job_uuid, notification)
+                async_execute_handlers,
+                (
+                        commands.split(),
+                        notification,
+                        job_uuid
+                    ),
+                callback = self._execute_callback
+            )
 
     def register_input(self, interests):
         self.input_interests = interests
@@ -99,7 +88,13 @@ class BonnieCollector(BonnieDaemon):
             handler = _class()
             handler.register(callback=self.register_handler)
 
-        input_modules = conf.get('collector', 'input_modules').split(',')
+        input_modules = conf.get('collector', 'input_modules')
+
+        if input_modules == None:
+            input_modules = ""
+
+        input_modules = [x.strip() for x in input_modules.split(',')]
+
         for _input in self.input_modules.values():
             if _input.name() in input_modules:
                 _input.run(callback=self.execute, interests=self.handler_interests.keys())
@@ -113,6 +108,22 @@ class BonnieCollector(BonnieDaemon):
 
         self.pool.close()
 
+    def _execute_callback(self, result):
+        (notification, job_uuid) = result
+
+        self.num_threads_busy -= 1
+
+        # pass result back to input module(s)
+        input_modules = conf.get('collector', 'input_modules').split(',')
+        for _input in self.input_modules.values():
+            if _input.name() in input_modules:
+                _input.callback_done(job_uuid, notification, threads=self._threads_available())
+
+    def _threads_available(self):
+        return (self.num_threads - self.num_threads_busy)
+
+    def _worker_process_start(self, *args, **kw):
+        log.info("Worker process %s initializing" % (multiprocessing.current_process().name))
 
 def async_execute_handlers(commands, notification, job_uuid):
     """
@@ -120,6 +131,9 @@ def async_execute_handlers(commands, notification, job_uuid):
 
         To be run an an asynchronous child process.
     """
+
+    log.info("COLLECT %r for %s by %s" % (commands, job_uuid, multiprocessing.current_process().name))
+
     # register handlers with the interrests again in this subprocess
     handler_interests = {}
 

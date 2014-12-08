@@ -80,7 +80,7 @@ def count_by_type_and_state(job_type, state):
 
 def first():
     db = init_db('jobs')
-    result = db.query(Job).filter(Job.state != b'DONE').order_by(Job.id).first()
+    result = db.query(Job).filter(Job.state != b'DONE', Job.state != b'FAILED').order_by(Job.id).first()
     return result
 
 def select(job_uuid):
@@ -131,8 +131,6 @@ def select_for_collector(identity):
 
     job.state = b'ALLOC'
     job.timestamp = datetime.datetime.utcnow()
-    collector.job = job.id
-    collector.state = b'BUSY'
     db.commit()
 
     return job
@@ -227,9 +225,6 @@ def unlock():
 
         log.debug("Unlocking %s job %s" % (job.job_type, job.uuid), level=7)
         job.state = b'PENDING'
-
-        for collector in db.query(Collector).filter_by(job=job.id).all():
-            collector.job = None
 
         for worker in db.query(Worker).filter_by(job=job.id).all():
             worker.job = None
