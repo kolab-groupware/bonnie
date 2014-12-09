@@ -23,6 +23,8 @@ import bonnie
 from bonnie.utils import parse_imap_uri
 from bonnie.worker.handlers import HandlerBase
 
+conf = bonnie.getConf()
+
 class MessageHandlerBase(HandlerBase):
     event = None
 
@@ -34,12 +36,23 @@ class MessageHandlerBase(HandlerBase):
         # call super for some basic notification processing
         (notification, jobs) = super(MessageHandlerBase, self).run(notification)
 
+        relevant = False
+
+        if 'archive' in self.features:
+            relevant = True
+
+        if 'backup' in self.features:
+            relevant = True
+
+        if not relevant:
+            return (notification, jobs)
+
         # Insert the URI UID (if it exists) in to uidset for further handlers
         if notification.has_key('uri') and notification.has_key('uidset'):
             uri = parse_imap_uri(notification['uri'])
 
             if uri.has_key('UID'):
-                notification['uidset'] = uri['UID']
+                notification['uidset'] = [ uri['UID'] ]
 
         # message notifications require message headers
         if not notification.has_key('messageHeaders'):
