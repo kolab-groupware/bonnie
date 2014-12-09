@@ -18,9 +18,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+import bonnie
+conf = bonnie.getConf()
+
 class HandlerBase(object):
+    features = []
+
     def __init__(self, *args, **kw):
-        pass
+        self.features = conf.get('bonnie', 'features')
+
+        if self.features == None:
+            self.features = ""
+
+        self.features = [x.strip() for x in self.features.split(',')]
 
     def register(self, callback):
         interests = {
