@@ -22,10 +22,35 @@
     Base handler for an event notification of type 'MessageNew'
 """
 
+import bonnie
 from bonnie.worker.handlers import MessageAppendHandler
+
+conf = bonnie.getConf()
 
 class MessageNewHandler(MessageAppendHandler):
     event = 'MessageNew'
 
     def __init__(self, *args, **kw):
         super(MessageNewHandler, self).__init__(*args, **kw)
+
+    def run(self, notification):
+        # call super for some basic notification processing
+        (notification, jobs) = super(MessageAppendHandler, self).run(notification)
+
+        relevant = False
+
+        if 'archive' in self.features:
+            relevant = True
+
+        if 'backup' in self.features:
+            relevant = True
+
+        if not relevant:
+            return (notification, jobs)
+
+        if not notification.has_key('messageContent') or notification['messageContent'] in [None, ""]:
+            self.log.debug("Adding FETCH job for " + self.event, level=8)
+            return (notification, [ b"FETCH" ])
+
+        return (notification, jobs)
+
