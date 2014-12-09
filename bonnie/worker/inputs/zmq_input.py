@@ -156,7 +156,7 @@ class ZMQInput(object):
 
                         self.set_state_ready()
 
-            if report is not None and self.lastping < (now - random.randint(55,65)):
+            if report is not None and self.lastping < (now - random.randint(300,600)):
                 report()
                 self.lastping = now
 
