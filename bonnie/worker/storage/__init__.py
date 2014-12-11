@@ -19,14 +19,30 @@
 #
 
 from caching import CachedDict
-from elasticsearch_storage import ElasticSearchStorage
 
 __all__ = [
-        'CachedDict',
-        'ElasticSearchStorage'
+        'CachedDict'
     ]
 
+try:
+    from elasticsearch_storage import ElasticSearchStorage
+    __all__.append('ElasticSearchStorage')
+except ImportError, errmsg:
+    pass
+
+try:
+    from riak_storage import RiakStorage
+    __all__.append('RiakStorage')
+except ImportError, errmsg:
+    pass
+
 def list_classes():
-    return [
-            ElasticSearchStorage
-        ]
+    classes = []
+
+    if 'ElasticSearchStorage' in __all__:
+        classes.append(ElasticSearchStorage)
+
+    if 'RiakStorage' in __all__:
+        classes.append(RiakStorage)
+
+    return classes

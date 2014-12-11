@@ -18,13 +18,27 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from elasticsearch_output import ElasticSearchOutput
+__all__ = []
 
-__all__ = [
-        'ElasticSearchOutput'
-    ]
+try:
+    from elasticsearch_output import ElasticSearchOutput
+    __all__.append('ElasticSearchOutput')
+except ImportError, errmsg:
+    pass
+
+try:
+    from riak_output import RiakOutput
+    __all__.append('RiakOutput')
+except ImportError, errmsg:
+    pass
 
 def list_classes():
-    return [
-            ElasticSearchOutput
-        ]
+    classes = []
+
+    if 'ElasticSearchOutput' in __all__:
+        classes.append(ElasticSearchOutput)
+
+    if 'RiakOutput' in __all__:
+        classes.append(RiakOutput)
+
+    return classes
