@@ -534,21 +534,24 @@ class ZMQBroker(object):
 
                     _job_notification == False
 
-            _job_timestamp = parse(_job_notification['timestamp']).astimezone(tzutc())
-            now = parse(
-                    datetime.datetime.strftime(
-                            datetime.datetime.utcnow(),
-                            "%Y-%m-%dT%H:%M:%S.%fZ"
-                        )
-                ).astimezone(tzutc())
-
-            delta = now - _job_timestamp
-            if hasattr(delta, 'total_seconds'):
-                seconds = delta.total_seconds()
+            if _job_notification == False:
+                jt = 0
             else:
-                seconds = (delta.days * 24 * 3600) + delta.seconds
+                _job_timestamp = parse(_job_notification['timestamp']).astimezone(tzutc())
+                now = parse(
+                        datetime.datetime.strftime(
+                                datetime.datetime.utcnow(),
+                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                            )
+                    ).astimezone(tzutc())
 
-            jt = round(seconds, 0)
+                delta = now - _job_timestamp
+                if hasattr(delta, 'total_seconds'):
+                    seconds = delta.total_seconds()
+                else:
+                    seconds = (delta.days * 24 * 3600) + delta.seconds
+
+                jt = round(seconds, 0)
 
         stats = {
                 'cb': collector.count_by_state(b'BUSY'),
