@@ -152,14 +152,15 @@ class BonnieWorkerProcess(object):
             __class.register(callback=self.register_input)
             self.input_modules[_class] = __class
 
-        output_modules = conf.get('worker', 'output_modules').split(',')
+        output_modules = [x.strip() for x in conf.get('worker', 'output_modules', '').split(',')]
+
         for _class in outputs.list_classes():
             _output = _class()
             if _output.name() in output_modules:
                 _output.register(callback=self.register_output)
                 self.output_modules[_class] = _output
 
-        storage_modules = conf.get('worker', 'storage_modules').split(',')
+        storage_modules = [x.strip() for x in conf.get('worker', 'storage_modules', '').split(',')]
         for _class in storage.list_classes():
             _storage = _class()
             if _storage.name() in storage_modules:
@@ -167,9 +168,9 @@ class BonnieWorkerProcess(object):
                 self.storage_modules[_class] = _storage
                 self.storage = _storage
 
-        output_exclude_events = conf.get('worker', 'output_exclude_events', None)
-        if not output_exclude_events == None:
-            self.output_exclude_events = output_exclude_events.split(',')
+        output_exclude_events = conf.get('worker', 'output_exclude_events', '')
+
+        self.output_exclude_events = [x.strip() for x in output_exclude_events.split(',')]
 
     def event_notification(self, notification):
         """
