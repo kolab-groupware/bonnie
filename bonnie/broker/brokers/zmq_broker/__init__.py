@@ -517,11 +517,19 @@ class ZMQBroker(object):
         jwa = job.count_by_type_and_state('worker', b'ALLOC')
 
         _job = job.first()
+        _job_notification = False
 
         if _job == None:
             jt = 0
         else:
-            _job_notification = json.loads(_job.notification)
+            while _job_notification == False:
+                try:
+                    _job_notification = json.loads(_job.notification)
+                except Exception, errmsg:
+                    job.set_state(_job.uuid, b'FAILED')
+                    _job = job.first()
+                    _job_notification == False
+
             _job_timestamp = parse(_job_notification['timestamp']).astimezone(tzutc())
             now = parse(
                     datetime.datetime.strftime(
