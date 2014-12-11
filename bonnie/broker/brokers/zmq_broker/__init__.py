@@ -528,6 +528,10 @@ class ZMQBroker(object):
                 except Exception, errmsg:
                     job.set_state(_job.uuid, b'FAILED')
                     _job = job.first()
+                    if _job == None:
+                        jt = 0
+                        break
+
                     _job_notification == False
 
             _job_timestamp = parse(_job_notification['timestamp']).astimezone(tzutc())
