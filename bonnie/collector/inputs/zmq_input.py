@@ -71,7 +71,7 @@ class ZMQInput(object):
             self.report_timestamp = time.time()
 
         if new_timeout:
-            self.ioloop.add_timeout(datetime.timedelta(seconds=10), self.report_state)
+            self.ioloop.add_timeout(datetime.timedelta(seconds=10), self.report_state_with_timeout)
 
     def report_state_with_timeout(self):
         self.report_state(new_timeout=True)
@@ -107,7 +107,7 @@ class ZMQInput(object):
 
     def callback_done(self, job_uuid, result, threads = 0):
         log.debug("Handler callback done for job %s: %r" % (job_uuid, result), level=8)
-        #log.info("Threads available: %d" % (threads))
+        log.debug("Threads available: %d" % (threads), level=8)
 
         if threads > 0:
             self.state = b'READY'
