@@ -4,11 +4,11 @@ After=syslog.target network.target
 
 [Service]
 Type=forking
-PIDFile=/run/bonnie-collector/bonnie-collector.pid
+PIDFile=/run/bonnie/bonnie-collector.pid
 User=kolab
 Group=kolab
 EnvironmentFile=/etc/sysconfig/bonnie-collector
-ExecStart=/usr/sbin/bonnie-collector $FLAGS --pid-file /run/bonnie-collector/bonnie-collector.pid
+ExecStart=/usr/sbin/bonnie-collector $FLAGS --pid-file /run/bonnie/bonnie-collector.pid
 ExecReload=/bin/kill -HUP $MAINPID
 ExecStop=/bin/kill -TERM $MAINPID
 
