@@ -52,6 +52,10 @@ class ChangelogHandler(HandlerBase):
         # check if this is a groupware object
         object_type = None
         msguid = notification['uidset'] if notification.has_key('uidset') else None
+
+        if isinstance(msguid, list):
+            msguid = msguid.pop()
+
         headers = notification['messageHeaders'][msguid] if notification['messageHeaders'].has_key(msguid) else None
         if headers and headers.has_key('X-Kolab-Type') and headers.has_key('Subject'):
             match = re.match(r"application/x-vnd.kolab.(\w+)", headers['X-Kolab-Type'])
