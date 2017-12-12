@@ -5,8 +5,8 @@ After=syslog.target network.target
 [Service]
 Type=forking
 PIDFile=/run/bonnie/bonnie-collector.pid
-User=kolab
-Group=kolab
+User=bonnie
+Group=bonnie
 EnvironmentFile=/etc/sysconfig/bonnie-collector
 ExecStart=/usr/sbin/bonnie-collector $FLAGS --pid-file /run/bonnie/bonnie-collector.pid
 ExecReload=/bin/kill -HUP $MAINPID

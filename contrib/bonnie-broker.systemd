@@ -5,8 +5,8 @@ After=syslog.target network.target
 [Service]
 Type=forking
 PIDFile=/run/bonnie/bonnie-broker.pid
-User=kolab
-Group=kolab
+User=bonnie
+Group=bonnie
 EnvironmentFile=/etc/sysconfig/bonnie-broker
 ExecStart=/usr/sbin/bonnie-broker $FLAGS --pid-file /run/bonnie/bonnie-broker.pid
 ExecReload=/bin/kill -HUP $MAINPID
